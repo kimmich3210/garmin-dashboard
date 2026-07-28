@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 GARMIN_EMAIL = os.getenv("GARMIN_EMAIL", "")
 GARMIN_PASSWORD = os.getenv("GARMIN_PASSWORD", "")
 SYNC_INTERVAL_HOURS = int(os.getenv("SYNC_INTERVAL_HOURS", "6"))
-ACTIVITY_LOOKBACK_DAYS = int(os.getenv("ACTIVITY_LOOKBACK_DAYS", "120"))
+ACTIVITY_LOOKBACK_DAYS = int(os.getenv("ACTIVITY_LOOKBACK_DAYS", "30"))
 
 DB_PATH = Path(__file__).parent / "workouts.db"
 TOKEN_PATH = Path(__file__).parent / ".garmin_session"
@@ -120,7 +120,6 @@ class GarminSync:
             return []
 
     def fetch_resting_heart_rate(self, days_back: int = 14) -> list[dict]:
-        """Fetch daily resting heart rate for the last N days."""
         if not self.client:
             if not self.login():
                 return []
@@ -132,7 +131,6 @@ class GarminSync:
             date_obj = today - timedelta(days=i)
             date_str = date_obj.strftime("%Y-%m-%d")
             try:
-                # Garmin API call for stats/heart rate on a specific date
                 stats = self.client.get_stats(date_str)
                 rhr = stats.get("restingHeartRate")
                 if rhr:
@@ -147,36 +145,30 @@ class GarminSync:
             val = raw.get(key)
             return val if val is not None else default
         
-        def meters_to_miles(m):
-            return m * 0.000621371 if m else None
+        def meters_to_km(m):
+            return (m / 1000.0) if m else None
         
         def seconds_to_minutes(s):
             return s / 60 if s else None
         
-        def mps_to_pace(speed):
+        def mps_to_metric_pace(speed):
+            """Convert m/s to min/km pace."""
             if not speed or speed == 0:
                 return None
-            return 26.8224 / speed
+            # 1000 meters / speed (m/s) = seconds per km -> convert to minutes
+            return (1000 / speed) / 60
         
         return {
             "activity_type": safe_get("activityType", {}).get("typeKey", "unknown"),
             "date": safe_get("startTimeLocal"),
             "title": safe_get("activityName", ""),
-            "distance": meters_to_miles(safe_get("distance")),
+            "distance_km": meters_to_km(safe_get("distance")),
             "calories": safe_get("calories"),
             "duration_minutes": seconds_to_minutes(safe_get("duration")),
             "avg_hr": safe_get("averageHR"),
             "max_hr": safe_get("maxHR"),
-            "aerobic_te": safe_get("aerobicTrainingEffect"),
-            "avg_cadence": safe_get("averageRunningCadenceInStepsPerMinute"),
-            "max_cadence": safe_get("maxRunningCadenceInStepsPerMinute"),
-            "avg_pace_minutes": mps_to_pace(safe_get("averageSpeed")),
-            "best_pace_minutes": mps_to_pace(safe_get("maxSpeed")),
-            "total_ascent": safe_get("elevationGain"),
-            "total_descent": safe_get("elevationLoss"),
-            "steps": safe_get("steps"),
-            "total_reps": safe_get("totalReps"),
-            "total_sets": safe_get("totalSets"),
+            "avg_pace_min_km": mps_to_metric_pace(safe_get("averageSpeed")),
+            "best_pace_min_km": mps_to_metric_pace(safe_get("maxSpeed")),
         }
 
 
@@ -195,18 +187,13 @@ def save_activities_to_db(activities: list[dict]) -> int:
         try:
             cursor.execute("""
                 INSERT OR REPLACE INTO activities (
-                    activity_type, date, title, distance, calories, duration_minutes,
-                    avg_hr, max_hr, aerobic_te, avg_cadence, max_cadence,
-                    avg_pace_minutes, best_pace_minutes, total_ascent, total_descent,
-                    steps, total_reps, total_sets
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    activity_type, date, title, distance_km, calories, duration_minutes,
+                    avg_hr, max_hr, avg_pace_min_km, best_pace_min_km
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
-                a["activity_type"], a["date"], a["title"], a["distance"],
+                a["activity_type"], a["date"], a["title"], a["distance_km"],
                 a["calories"], a["duration_minutes"], a["avg_hr"], a["max_hr"],
-                a["aerobic_te"], a["avg_cadence"], a["max_cadence"],
-                a["avg_pace_minutes"], a["best_pace_minutes"],
-                a["total_ascent"], a["total_descent"],
-                a["steps"], a["total_reps"], a["total_sets"],
+                a["avg_pace_min_km"], a["best_pace_min_km"],
             ))
             inserted += 1
         except Exception as e:
@@ -231,6 +218,76 @@ def save_resting_heart_rate_to_db(rhr_list: list[dict]):
     conn.close()
 
 
+def generate_automated_feedback():
+    """Generates automated coaching feedback based on the last 30 days of running."""
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    
+    # Get all runs in the last 30 days
+    cutoff = (datetime.now() - timedelta(days=30)).isoformat()
+    runs = conn.execute("""
+        SELECT date, title, distance_km, avg_pace_min_km, avg_hr, duration_minutes
+        FROM activities
+        WHERE activity_type IN ('running', 'treadmill_running', 'track_running')
+          AND date >= ?
+          AND distance_km IS NOT NULL
+        ORDER BY date DESC
+    """, (cutoff,)).fetchall()
+    conn.close()
+
+    if not runs:
+        return {
+            "summary": "Ingen løbeaktiviteter fundet de sidste 30 dage.",
+            "status": "neutral",
+            "details": []
+        }
+
+    total_runs = len(runs)
+    long_runs = [r for r in runs if r["distance_km"] >= 10.0]
+    maf_ceiling = 155
+    target_pace = 5.0  # 5:00 min/km
+
+    feedback_items = []
+    optimal_runs = 0
+
+    for r in runs:
+        dist = r["distance_km"]
+        hr = r["avg_hr"] or 0
+        pace = r["avg_pace_min_km"] or 99.0
+        
+        # Check goals: >= 10km, HR <= 155, pace <= 5:00 min/km
+        passed_dist = dist >= 10.0
+        passed_hr = hr > 0 and hr <= maf_ceiling
+        passed_pace = pace <= target_pace
+
+        if passed_dist and passed_hr and passed_pace:
+            optimal_runs += 1
+
+    # Format feedback text
+    summary_text = fanal = ""
+    if optimal_runs > 0:
+        status = "success"
+        summary_text = f"🔥 Stort stykke arbejde! Du har gennemført {optimal_runs} ud af {total_runs} løb i de sidste 30 dage, der rammer alle dine mål (10+ km, under MAF 155 bpm og hurtigere end 5:00 min/km)."
+    else:
+        status = "warning"
+        summary_text = f"⚠️ Du har {total_runs} løb de sidste 30 dage, men ingen opfylder endnu den perfekte kombination af 10+ km, puls under 155 og pace på 5:00 min/km."
+
+    # Add specific breakdown advice
+    details = []
+    details.append(f"• **Lange ture (10+ km):** Du har {len(long_runs)} ture over 10 km ud af {total_runs} samlede løb.")
+    
+    avg_hr_recent = sum([r["avg_hr"] for r in runs if r["avg_hr"]]) / max(1, len([r for r in runs if r["avg_hr"]]))
+    details.append(f"• **Puls-status (MAF Loft 155):** Din gennemsnitlige puls på de seneste løb er {avg_hr_recent:.0f} bpm.")
+
+    return {
+        "summary": summary_text,
+        "status": status,
+        "total_runs": total_runs,
+        "optimal_runs": optimal_runs,
+        "details": details
+    }
+
+
 async def scheduled_sync():
     logger.info("Starting scheduled sync...")
     activities = garmin_sync.fetch_activities(ACTIVITY_LOOKBACK_DAYS)
@@ -240,7 +297,7 @@ async def scheduled_sync():
     save_resting_heart_rate_to_db(rhr_data)
     
     garmin_sync.last_sync = datetime.now()
-    logger.info("Scheduled sync complete (activities + RHR updated)")
+    logger.info("Scheduled sync complete")
 
 
 # ============================================================================
@@ -256,21 +313,13 @@ def init_db():
             activity_type TEXT,
             date TEXT,
             title TEXT,
-            distance REAL,
+            distance_km REAL,
             calories INTEGER,
             duration_minutes REAL,
             avg_hr INTEGER,
             max_hr INTEGER,
-            aerobic_te REAL,
-            avg_cadence INTEGER,
-            max_cadence INTEGER,
-            avg_pace_minutes REAL,
-            best_pace_minutes REAL,
-            total_ascent INTEGER,
-            total_descent INTEGER,
-            steps INTEGER,
-            total_reps INTEGER,
-            total_sets INTEGER,
+            avg_pace_min_km REAL,
+            best_pace_min_km REAL,
             UNIQUE(activity_type, date, title)
         )
     """)
@@ -314,7 +363,7 @@ async def lifespan(app: FastAPI):
     if scheduler.running:
         scheduler.shutdown()
 
-app = FastAPI(title="Garmin Workout Dashboard", lifespan=lifespan)
+app = FastAPI(title="Garmin Dashboard", lifespan=lifespan)
 
 @app.get("/api/sync/status")
 async def sync_status():
@@ -333,61 +382,35 @@ async def sync_now():
     rhr_data = garmin_sync.fetch_resting_heart_rate(14)
     save_resting_heart_rate_to_db(rhr_data)
     garmin_sync.last_sync = datetime.now()
-    return {"message": "Sync completed successfully", "last_sync": garmin_sync.last_sync.isoformat()}
+    return {"message": "Sync og automatisk feedback fuldført", "last_sync": garmin_sync.last_sync.isoformat()}
 
 @app.get("/api/health/resting-hr")
 async def get_resting_hr():
-    """Get resting heart rate for the last 14 days."""
     conn = get_db_connection()
+    rows = conn.execute("SELECT date, resting_hr FROM resting_heart_rate ORDER BY date ASC LIMIT 14").fetchall()
+    conn.close()
+    return [dict(row) for row in rows]
+
+@app.get("/api/running/pace-30days")
+async def get_running_pace_30days():
+    """Get pace and details for all runs in the last 30 days."""
+    conn = get_db_connection()
+    cutoff = (datetime.now() - timedelta(days=30)).isoformat()
     rows = conn.execute("""
-        SELECT date, resting_hr 
-        FROM resting_heart_rate 
-        ORDER BY date ASC 
-        LIMIT 14
-    """).fetchall()
+        SELECT date, title, distance_km, avg_pace_min_km, avg_hr, max_hr
+        FROM activities
+        WHERE activity_type IN ('running', 'treadmill_running', 'track_running')
+          AND date >= ?
+          AND avg_pace_min_km IS NOT NULL
+        ORDER BY date ASC
+    """, (cutoff,)).fetchall()
     conn.close()
     return [dict(row) for row in rows]
 
-@app.get("/api/activities")
-async def get_activities(limit: int = 100):
-    conn = get_db_connection()
-    rows = conn.execute("SELECT * FROM activities ORDER BY date DESC LIMIT ?", (limit,)).fetchall()
-    conn.close()
-    return [dict(row) for row in rows]
-
-@app.get("/api/summary")
-async def get_summary():
-    conn = get_db_connection()
-    summary = {}
-    row = conn.execute("SELECT COUNT(*) as total_activities, SUM(calories) as total_calories, SUM(duration_minutes) as total_duration FROM activities").fetchone()
-    summary["totals"] = dict(row)
-    row = conn.execute("SELECT SUM(distance) as total_miles, AVG(avg_pace_minutes) as avg_pace, MIN(best_pace_minutes) as best_pace, AVG(avg_hr) as avg_hr FROM activities WHERE activity_type IN ('running', 'treadmill_running', 'track_running') AND distance > 0.5").fetchone()
-    summary["running"] = dict(row)
-    row = conn.execute("SELECT SUM(total_reps) as total_reps, SUM(total_sets) as total_sets FROM activities WHERE activity_type = 'strength_training'").fetchone()
-    summary["strength"] = dict(row)
-    conn.close()
-    return summary
-
-@app.get("/api/running/pace-trend")
-async def get_pace_trend():
-    conn = get_db_connection()
-    rows = conn.execute("SELECT date, avg_pace_minutes, best_pace_minutes, distance, title FROM activities WHERE activity_type IN ('running', 'treadmill_running', 'track_running') AND avg_pace_minutes IS NOT NULL AND distance > 0.5 ORDER BY date ASC").fetchall()
-    conn.close()
-    return [dict(row) for row in rows]
-
-@app.get("/api/running/weekly-mileage")
-async def get_weekly_mileage():
-    conn = get_db_connection()
-    rows = conn.execute("SELECT strftime('%Y-%W', date) as week, SUM(distance) as total_distance FROM activities WHERE activity_type IN ('running', 'treadmill_running', 'track_running') AND distance > 0 GROUP BY week ORDER BY week ASC").fetchall()
-    conn.close()
-    return [dict(row) for row in rows]
-
-@app.get("/api/strength/summary")
-async def get_strength_summary():
-    conn = get_db_connection()
-    rows = conn.execute("SELECT date, title, duration_minutes, calories, total_reps, total_sets FROM activities WHERE activity_type = 'strength_training' ORDER BY date ASC").fetchall()
-    conn.close()
-    return [dict(row) for row in rows]
+@app.get("/api/running/feedback")
+async def get_running_feedback():
+    """Get automated coaching feedback based on user goals."""
+    return generate_automated_feedback()
 
 @app.get("/", response_class=HTMLResponse)
 async def dashboard():
