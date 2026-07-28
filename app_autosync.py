@@ -152,10 +152,8 @@ class GarminSync:
             return s / 60 if s else None
         
         def mps_to_metric_pace(speed):
-            """Convert m/s to min/km pace."""
             if not speed or speed == 0:
                 return None
-            # 1000 meters / speed (m/s) = seconds per km -> convert to minutes
             return (1000 / speed) / 60
         
         return {
@@ -219,11 +217,9 @@ def save_resting_heart_rate_to_db(rhr_list: list[dict]):
 
 
 def generate_automated_feedback():
-    """Generates automated coaching feedback based on the last 30 days of running."""
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     
-    # Get all runs in the last 30 days
     cutoff = (datetime.now() - timedelta(days=30)).isoformat()
     runs = conn.execute("""
         SELECT date, title, distance_km, avg_pace_min_km, avg_hr, duration_minutes
@@ -245,34 +241,22 @@ def generate_automated_feedback():
     total_runs = len(runs)
     long_runs = [r for r in runs if r["distance_km"] >= 10.0]
     maf_ceiling = 155
-    target_pace = 5.0  # 5:00 min/km
+    target_pace = 5.0
 
-    feedback_items = []
     optimal_runs = 0
-
     for r in runs:
         dist = r["distance_km"]
         hr = r["avg_hr"] or 0
         pace = r["avg_pace_min_km"] or 99.0
         
-        # Check goals: >= 10km, HR <= 155, pace <= 5:00 min/km
-        passed_dist = dist >= 10.0
-        passed_hr = hr > 0 and hr <= maf_ceiling
-        passed_pace = pace <= target_pace
-
-        if passed_dist and passed_hr and passed_pace:
+        if dist >= 10.0 and hr > 0 and hr <= maf_ceiling and pace <= target_pace:
             optimal_runs += 1
 
-    # Format feedback text
-    summary_text = fanal = ""
     if optimal_runs > 0:
-        status = "success"
         summary_text = f"🔥 Stort stykke arbejde! Du har gennemført {optimal_runs} ud af {total_runs} løb i de sidste 30 dage, der rammer alle dine mål (10+ km, under MAF 155 bpm og hurtigere end 5:00 min/km)."
     else:
-        status = "warning"
         summary_text = f"⚠️ Du har {total_runs} løb de sidste 30 dage, men ingen opfylder endnu den perfekte kombination af 10+ km, puls under 155 og pace på 5:00 min/km."
 
-    # Add specific breakdown advice
     details = []
     details.append(f"• **Lange ture (10+ km):** Du har {len(long_runs)} ture over 10 km ud af {total_runs} samlede løb.")
     
@@ -281,7 +265,7 @@ def generate_automated_feedback():
 
     return {
         "summary": summary_text,
-        "status": status,
+        "status": status if 'status' in locals() else "warning",
         "total_runs": total_runs,
         "optimal_runs": optimal_runs,
         "details": details
@@ -292,17 +276,11 @@ async def scheduled_sync():
     logger.info("Starting scheduled sync...")
     activities = garmin_sync.fetch_activities(ACTIVITY_LOOKBACK_DAYS)
     save_activities_to_db(activities)
-    
     rhr_data = garmin_sync.fetch_resting_heart_rate(14)
     save_resting_heart_rate_to_db(rhr_data)
-    
     garmin_sync.last_sync = datetime.now()
     logger.info("Scheduled sync complete")
 
-
-# ============================================================================
-# DATABASE SETUP
-# ============================================================================
 
 def init_db():
     conn = sqlite3.connect(DB_PATH)
@@ -338,10 +316,6 @@ def get_db_connection():
     conn.row_factory = sqlite3.Row
     return conn
 
-
-# ============================================================================
-# FASTAPI APP
-# ============================================================================
 
 scheduler = AsyncIOScheduler()
 
@@ -393,7 +367,6 @@ async def get_resting_hr():
 
 @app.get("/api/running/pace-30days")
 async def get_running_pace_30days():
-    """Get pace and details for all runs in the last 30 days."""
     conn = get_db_connection()
     cutoff = (datetime.now() - timedelta(days=30)).isoformat()
     rows = conn.execute("""
@@ -409,7 +382,6 @@ async def get_running_pace_30days():
 
 @app.get("/api/running/feedback")
 async def get_running_feedback():
-    """Get automated coaching feedback based on user goals."""
     return generate_automated_feedback()
 
 @app.get("/", response_class=HTMLResponse)
