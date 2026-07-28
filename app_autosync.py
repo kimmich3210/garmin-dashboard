@@ -160,11 +160,13 @@ class GarminSync:
             "activity_type": safe_get("activityType", {}).get("typeKey", "unknown"),
             "date": safe_get("startTimeLocal"),
             "title": safe_get("activityName", ""),
+            "distance": safe_get("distance"),
             "distance_km": meters_to_km(safe_get("distance")),
             "calories": safe_get("calories"),
             "duration_minutes": seconds_to_minutes(safe_get("duration")),
             "avg_hr": safe_get("averageHR"),
             "max_hr": safe_get("maxHR"),
+            "avg_pace_minutes": mps_to_metric_pace(safe_get("averageSpeed")),
             "avg_pace_min_km": mps_to_metric_pace(safe_get("averageSpeed")),
             "best_pace_min_km": mps_to_metric_pace(safe_get("maxSpeed")),
         }
@@ -185,11 +187,11 @@ def save_activities_to_db(activities: list[dict]) -> int:
         try:
             cursor.execute("""
                 INSERT OR REPLACE INTO activities (
-                    activity_type, date, title, distance_km, calories, duration_minutes,
-                    avg_hr, max_hr, avg_pace_min_km, best_pace_min_km
+                    activity_type, date, title, distance, calories, duration_minutes,
+                    avg_hr, max_hr, avg_pace_minutes, best_pace_minutes
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
-                a["activity_type"], a["date"], a["title"], a["distance_km"],
+                a["activity_type"], a["date"], a["title"], a["distance"],
                 a["calories"], a["duration_minutes"], a["avg_hr"], a["max_hr"],
                 a["avg_pace_min_km"], a["best_pace_min_km"],
             ))
@@ -217,65 +219,36 @@ def save_resting_heart_rate_to_db(rhr_list: list[dict]):
 
 
 def generate_automated_feedback():
-    """Generates automated coaching feedback based on the last 30 days of running."""
+    """Generates short, simple coaching feedback based on the last 30 days of running."""
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     
     cutoff = (datetime.now() - timedelta(days=30)).isoformat()
     runs = conn.execute("""
-        SELECT date, title, distance_km, avg_pace_min_km, avg_hr, duration_minutes
+        SELECT date, title, distance, avg_pace_minutes, avg_hr
         FROM activities
         WHERE activity_type IN ('running', 'treadmill_running', 'track_running')
           AND date >= ?
-          AND distance_km IS NOT NULL
+          AND distance IS NOT NULL
         ORDER BY date DESC
     """, (cutoff,)).fetchall()
     conn.close()
 
     if not runs:
         return {
-            "summary": "Ingen løbeaktiviteter fundet de sidste 30 dage.",
-            "status": "neutral",
+            "summary": "Ingen løb de sidste 30 dage.",
             "details": []
         }
 
     total_runs = len(runs)
-    long_runs = [r for r in runs if r["distance_km"] >= 10.0]
-    maf_ceiling = 155
-    target_pace = 5.0
+    long_runs = len([r for r in runs if (r["distance"] / 1000.0) >= 10.0])
+    avg_hr = sum([r["avg_hr"] for r in runs if r["avg_hr"]]) / max(1, len([r for r in runs if r["avg_hr"]]))
 
-    optimal_runs = 0
-    good_maf_long_runs = 0
-
-    for r in runs:
-        dist = r["distance_km"]
-        hr = r["avg_hr"] or 0
-        pace = r["avg_pace_min_km"] or 99.0
-        
-        passed_dist = dist >= 10.0
-        passed_hr = hr > 0 and hr <= maf_ceiling
-        passed_pace = pace <= target_pace
-
-        if passed_dist and passed_hr and passed_pace:
-            optimal_runs += 1
-        if passed_dist and passed_hr:
-            good_maf_long_runs += 1
-
-    avg_hr_recent = sum([r["avg_hr"] for r in runs if r["avg_hr"]]) / max(1, len([r for r in runs if r["avg_hr"]]))
-    
-    summary_text = f"🎯 **Trænerstatus:** Du har taget {total_runs} løb de sidste 30 dage. Du er hammerstærk på udholdenhed med **{len(long_runs)} ture over 10 km** og en flot gennemsnitspuls på **{avg_hr_recent:.0f} bpm** (under dit MAF-loft på 155)!"
-
-    details = [
-        f"✅ **Udholdenhed:** {len(long_runs)} af dine {total_runs} løb er på 10 km eller mere.",
-        f"✅ **Pulsstyring (MAF < 155):** Du holder pulsen nede på 143 bpm i gennemsnit – fantastisk for din aerobe base!",
-        f"🚀 **Næste skridt mod 5:00 min/km:** Du har {good_maf_long_runs} gode lange ture under MAF-loftet. For at ramme dit pace-mål på de lange distancer, skal din gennemsnitlig pace på turene gradvist skubbes tættere på 5:00 min/km."
-    ]
+    summary_text = f"🏃 Sidste 30 dage: {total_runs} løb ({long_runs} over 10 km). Snitpuls: {avg_hr:.0f} bpm (MAF loft: 155)."
+    details = ["💡 Mål: Hold pulsen under 155 og ryk pacen tættere på 5:00 min/km."]
 
     return {
         "summary": summary_text,
-        "status": "success" if optimal_runs > 0 else "info",
-        "total_runs": total_runs,
-        "optimal_runs": optimal_runs,
         "details": details
     }
 
@@ -299,13 +272,21 @@ def init_db():
             activity_type TEXT,
             date TEXT,
             title TEXT,
-            distance_km REAL,
+            distance REAL,
             calories INTEGER,
             duration_minutes REAL,
             avg_hr INTEGER,
             max_hr INTEGER,
-            avg_pace_min_km REAL,
-            best_pace_min_km REAL,
+            aerobic_te REAL,
+            avg_cadence INTEGER,
+            max_cadence INTEGER,
+            avg_pace_minutes REAL,
+            best_pace_minutes REAL,
+            total_ascent INTEGER,
+            total_descent INTEGER,
+            steps INTEGER,
+            total_reps INTEGER,
+            total_sets INTEGER,
             UNIQUE(activity_type, date, title)
         )
     """)
@@ -378,11 +359,11 @@ async def get_running_pace_30days():
     conn = get_db_connection()
     cutoff = (datetime.now() - timedelta(days=30)).isoformat()
     rows = conn.execute("""
-        SELECT date, title, distance_km, avg_pace_min_km, avg_hr, max_hr
+        SELECT date, title, distance, avg_pace_minutes as avg_pace_min_km, avg_hr, max_hr
         FROM activities
         WHERE activity_type IN ('running', 'treadmill_running', 'track_running')
           AND date >= ?
-          AND avg_pace_min_km IS NOT NULL
+          AND avg_pace_minutes IS NOT NULL
         ORDER BY date ASC
     """, (cutoff,)).fetchall()
     conn.close()
