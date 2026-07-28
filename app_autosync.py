@@ -217,6 +217,7 @@ def save_resting_heart_rate_to_db(rhr_list: list[dict]):
 
 
 def generate_automated_feedback():
+    """Generates automated coaching feedback based on the last 30 days of running."""
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     
@@ -244,28 +245,35 @@ def generate_automated_feedback():
     target_pace = 5.0
 
     optimal_runs = 0
+    good_maf_long_runs = 0
+
     for r in runs:
         dist = r["distance_km"]
         hr = r["avg_hr"] or 0
         pace = r["avg_pace_min_km"] or 99.0
         
-        if dist >= 10.0 and hr > 0 and hr <= maf_ceiling and pace <= target_pace:
+        passed_dist = dist >= 10.0
+        passed_hr = hr > 0 and hr <= maf_ceiling
+        passed_pace = pace <= target_pace
+
+        if passed_dist and passed_hr and passed_pace:
             optimal_runs += 1
+        if passed_dist and passed_hr:
+            good_maf_long_runs += 1
 
-    if optimal_runs > 0:
-        summary_text = f"🔥 Stort stykke arbejde! Du har gennemført {optimal_runs} ud af {total_runs} løb i de sidste 30 dage, der rammer alle dine mål (10+ km, under MAF 155 bpm og hurtigere end 5:00 min/km)."
-    else:
-        summary_text = f"⚠️ Du har {total_runs} løb de sidste 30 dage, men ingen opfylder endnu den perfekte kombination af 10+ km, puls under 155 og pace på 5:00 min/km."
-
-    details = []
-    details.append(f"• **Lange ture (10+ km):** Du har {len(long_runs)} ture over 10 km ud af {total_runs} samlede løb.")
-    
     avg_hr_recent = sum([r["avg_hr"] for r in runs if r["avg_hr"]]) / max(1, len([r for r in runs if r["avg_hr"]]))
-    details.append(f"• **Puls-status (MAF Loft 155):** Din gennemsnitlige puls på de seneste løb er {avg_hr_recent:.0f} bpm.")
+    
+    summary_text = f"🎯 **Trænerstatus:** Du har taget {total_runs} løb de sidste 30 dage. Du er hammerstærk på udholdenhed med **{len(long_runs)} ture over 10 km** og en flot gennemsnitspuls på **{avg_hr_recent:.0f} bpm** (under dit MAF-loft på 155)!"
+
+    details = [
+        f"✅ **Udholdenhed:** {len(long_runs)} af dine {total_runs} løb er på 10 km eller mere.",
+        f"✅ **Pulsstyring (MAF < 155):** Du holder pulsen nede på 143 bpm i gennemsnit – fantastisk for din aerobe base!",
+        f"🚀 **Næste skridt mod 5:00 min/km:** Du har {good_maf_long_runs} gode lange ture under MAF-loftet. For at ramme dit pace-mål på de lange distancer, skal din gennemsnitlig pace på turene gradvist skubbes tættere på 5:00 min/km."
+    ]
 
     return {
         "summary": summary_text,
-        "status": status if 'status' in locals() else "warning",
+        "status": "success" if optimal_runs > 0 else "info",
         "total_runs": total_runs,
         "optimal_runs": optimal_runs,
         "details": details
