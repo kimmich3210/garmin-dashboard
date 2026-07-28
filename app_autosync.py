@@ -70,7 +70,7 @@ class GarminSync:
             self.client.login()
 
             # Save session for future use
-            self.client.garth.dump(TOKEN_PATH)
+            # self.client.garth.dump(TOKEN_PATH)
             logger.info("Fresh login successful, session saved")
             return True
 
@@ -631,7 +631,7 @@ async def get_summary():
 async def dashboard():
     """Serve the main dashboard with sync status."""
     html_path = Path(__file__).parent / "dashboard_new.html"
-    return html_path.read_text()
+    return html_path.read_text(encoding="utf-8")
 
 
 # ============================================================================
