@@ -69,9 +69,13 @@ class GarminSync:
             self.client = Garmin(GARMIN_EMAIL, GARMIN_PASSWORD)
             self.client.login()
 
-            # Save session for future use
-            # self.client.garth.dump(TOKEN_PATH)
-            logger.info("Fresh login successful, session saved")
+            # Save session safely (skipped on read-only environments like Render)
+            try:
+                self.client.garth.dump(TOKEN_PATH)
+            except Exception:
+                pass
+
+            logger.info("Fresh login successful")
             return True
 
         except Exception as e:
@@ -86,22 +90,18 @@ class GarminSync:
                 return []
 
         try:
-            # Garmin API returns activities in reverse chronological order
-            # Fetch in batches to get full lookback period
             cutoff_date = datetime.now() - timedelta(days=days_back)
 
             all_activities = []
             batch_size = 100
             start = 0
 
-            # Keep fetching until we've gone past the cutoff date or hit 500 activities max
             while start < 500:
                 batch = self.client.get_activities(start, batch_size)
 
                 if not batch:
                     break
 
-                # Check if we've gone past the cutoff date
                 oldest_in_batch = datetime.fromisoformat(
                     batch[-1]["startTimeLocal"].replace("Z", "+00:00")
                 )
@@ -113,7 +113,6 @@ class GarminSync:
                     if activity_date >= cutoff_date:
                         all_activities.append(self._normalize_activity(activity))
 
-                # If the oldest activity in this batch is before cutoff, we're done
                 if oldest_in_batch < cutoff_date:
                     break
 
@@ -124,7 +123,6 @@ class GarminSync:
 
         except Exception as e:
             logger.error(f"Failed to fetch activities: {e}")
-            # Try re-login once
             if self.login():
                 return self.fetch_activities(days_back)
             return []
@@ -146,7 +144,6 @@ class GarminSync:
             """Convert m/s to min/mile pace."""
             if not speed or speed == 0:
                 return None
-            # m/s -> min/mile
             return 26.8224 / speed
         
         return {
@@ -270,15 +267,12 @@ scheduler = AsyncIOScheduler()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup and shutdown logic."""
-    # Startup
     init_db()
     
-    # Initial sync on startup
     if GARMIN_EMAIL and GARMIN_PASSWORD:
         logger.info("Credentials found, performing initial sync...")
         await scheduled_sync()
         
-        # Schedule recurring syncs
         scheduler.add_job(
             scheduled_sync,
             'interval',
@@ -293,7 +287,6 @@ async def lifespan(app: FastAPI):
     
     yield
     
-    # Shutdown
     if scheduler.running:
         scheduler.shutdown()
 
@@ -482,7 +475,6 @@ async def get_metrics(start_date: str = None, end_date: str = None):
     """Get aggregated metrics with optional date filtering."""
     conn = get_db_connection()
 
-    # Build base query with date filters
     date_filter = ""
     params = []
     if start_date:
@@ -492,7 +484,6 @@ async def get_metrics(start_date: str = None, end_date: str = None):
         date_filter += " AND date <= ?"
         params.append(end_date)
 
-    # Running metrics
     run_query = f"""
         SELECT
             COUNT(*) as count,
@@ -505,7 +496,6 @@ async def get_metrics(start_date: str = None, end_date: str = None):
     """
     run_row = conn.execute(run_query, params).fetchone()
 
-    # Strength training metrics
     strength_query = f"""
         SELECT
             COUNT(*) as count,
@@ -517,7 +507,6 @@ async def get_metrics(start_date: str = None, end_date: str = None):
     """
     strength_row = conn.execute(strength_query, params).fetchone()
 
-    # Other activities metrics
     other_query = f"""
         SELECT
             COUNT(*) as count,
@@ -572,7 +561,6 @@ async def get_other_activities_weekly(start_date: str = None, end_date: str = No
     rows = conn.execute(query, params).fetchall()
     conn.close()
 
-    # Group by week
     weekly_data = {}
     for row in rows:
         week = row["week"]
@@ -633,338 +621,6 @@ async def dashboard():
     html_path = Path(__file__).parent / "dashboard_new.html"
     return html_path.read_text(encoding="utf-8")
 
-
-# ============================================================================
-# HTML TEMPLATE (same as before, with sync status added)
-# ============================================================================
-
-HTML_TEMPLATE = """
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Garmin Workout Dashboard</title>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: #0f0f0f; color: #e0e0e0; min-height: 100vh; padding: 20px;
-        }
-        .header { text-align: center; margin-bottom: 30px; padding: 20px; }
-        .header h1 { font-size: 2.5rem; color: #00d4ff; margin-bottom: 10px; }
-        .header p { color: #888; }
-
-        .controls {
-            display: flex; justify-content: center; align-items: center; gap: 20px; flex-wrap: wrap;
-            background: #1a1a1a; padding: 15px 20px; border-radius: 8px;
-            margin: 20px auto; max-width: 1200px; border: 1px solid #333;
-        }
-        .controls label { color: #888; font-size: 0.9rem; }
-        .controls input[type="date"] {
-            background: #0f0f0f; color: #e0e0e0; border: 1px solid #333;
-            padding: 8px 12px; border-radius: 5px; font-size: 0.9rem;
-        }
-        .controls input[type="date"]::-webkit-calendar-picker-indicator {
-            filter: invert(1);
-        }
-        .sync-status {
-            display: inline-flex; align-items: center; gap: 10px;
-        }
-        .sync-indicator { width: 10px; height: 10px; border-radius: 50%; }
-        .sync-indicator.active { background: #4ade80; box-shadow: 0 0 10px #4ade80; }
-        .sync-indicator.inactive { background: #f87171; }
-        .sync-info { font-size: 0.85rem; color: #888; }
-
-        .sync-btn, .filter-btn {
-            background: #00d4ff; color: #0f0f0f; border: none;
-            padding: 8px 16px; border-radius: 5px; cursor: pointer; font-weight: bold;
-            font-size: 0.9rem;
-        }
-        .sync-btn:hover, .filter-btn:hover { background: #00a8cc; }
-        .sync-btn:disabled, .filter-btn:disabled { background: #555; cursor: not-allowed; }
-
-        .section { margin-bottom: 40px; max-width: 1400px; margin-left: auto; margin-right: auto; }
-        .section h2 {
-            color: #fff; margin-bottom: 20px; padding-bottom: 10px;
-            border-bottom: 2px solid #00d4ff; display: flex; align-items: center; gap: 10px;
-        }
-
-        .charts-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(500px, 1fr)); gap: 20px; }
-        .chart-container {
-            background: #1a1a1a; border-radius: 10px; padding: 20px; border: 1px solid #333;
-        }
-        .chart-container h3 { color: #fff; margin-bottom: 15px; font-size: 1.1rem; }
-        .chart-wrapper { position: relative; height: 350px; }
-
-        .activities-table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-        .activities-table th, .activities-table td {
-            padding: 12px; text-align: left; border-bottom: 1px solid #333;
-        }
-        .activities-table th { background: #1a1a1a; color: #00d4ff; font-weight: 600; }
-        .activities-table tr:hover { background: #1a1a1a; }
-
-        .activity-type {
-            display: inline-block; padding: 4px 8px; border-radius: 4px;
-            font-size: 0.8rem; font-weight: 500;
-        }
-        .type-running { background: #2d5a2d; color: #90EE90; }
-        .type-strength { background: #5a2d2d; color: #FFB6C1; }
-        .type-walking { background: #2d4a5a; color: #87CEEB; }
-        .type-other { background: #4a4a4a; color: #ddd; }
-
-        @media (max-width: 768px) {
-            .charts-grid { grid-template-columns: 1fr; }
-            .chart-wrapper { height: 300px; }
-            .controls { flex-direction: column; align-items: stretch; }
-        }
-    </style>
-</head>
-<body>
-    <div class="header">
-        <h1>🏃 Garmin Dashboard</h1>
-        <p>Your workout data, visualized</p>
-        <div class="sync-status">
-            <div class="sync-indicator" id="syncIndicator"></div>
-            <div class="sync-info">
-                <div id="syncStatusText">Checking...</div>
-                <div id="lastSyncText"></div>
-            </div>
-            <button class="sync-btn" id="syncBtn" onclick="triggerSync()">Sync Now</button>
-        </div>
-    </div>
-    
-    <div class="stats-grid" id="statsGrid"></div>
-    
-    <div class="section">
-        <h2>🏃 Running</h2>
-        <div class="charts-grid">
-            <div class="chart-container">
-                <h3>Pace Trend</h3>
-                <div class="chart-wrapper"><canvas id="paceChart"></canvas></div>
-            </div>
-            <div class="chart-container">
-                <h3>Weekly Mileage</h3>
-                <div class="chart-wrapper"><canvas id="mileageChart"></canvas></div>
-            </div>
-        </div>
-    </div>
-    
-    <div class="section">
-        <h2>💪 Strength Training</h2>
-        <div class="charts-grid">
-            <div class="chart-container">
-                <h3>Volume Over Time (Reps)</h3>
-                <div class="chart-wrapper"><canvas id="strengthRepsChart"></canvas></div>
-            </div>
-            <div class="chart-container">
-                <h3>Session Duration & Calories</h3>
-                <div class="chart-wrapper"><canvas id="strengthDurationChart"></canvas></div>
-            </div>
-        </div>
-    </div>
-    
-    <div class="section">
-        <h2>📋 Recent Activities</h2>
-        <table class="activities-table">
-            <thead>
-                <tr><th>Date</th><th>Type</th><th>Title</th><th>Duration</th><th>Distance</th><th>Calories</th><th>Avg HR</th></tr>
-            </thead>
-            <tbody id="activitiesBody"></tbody>
-        </table>
-    </div>
-    
-    <script>
-        Chart.defaults.color = '#888';
-        Chart.defaults.borderColor = '#333';
-        
-        let paceChart, mileageChart, strengthRepsChart, strengthDurationChart;
-        
-        function formatPace(m) {
-            if (!m) return '--';
-            const mins = Math.floor(m), secs = Math.round((m - mins) * 60);
-            return `${mins}:${secs.toString().padStart(2, '0')}`;
-        }
-        
-        function formatDuration(m) {
-            if (!m) return '--';
-            const hrs = Math.floor(m / 60), mins = Math.round(m % 60);
-            return hrs > 0 ? `${hrs}h ${mins}m` : `${mins}m`;
-        }
-        
-        function getTypeClass(t) {
-            if (t.includes('running')) return 'type-running';
-            if (t.includes('strength')) return 'type-strength';
-            if (t.includes('walking')) return 'type-walking';
-            return 'type-other';
-        }
-        
-        async function loadSyncStatus() {
-            try {
-                const res = await fetch('/api/sync/status');
-                const data = await res.json();
-                
-                const indicator = document.getElementById('syncIndicator');
-                const statusText = document.getElementById('syncStatusText');
-                const lastSync = document.getElementById('lastSyncText');
-                const btn = document.getElementById('syncBtn');
-                
-                if (data.auto_sync_enabled) {
-                    indicator.className = 'sync-indicator active';
-                    statusText.textContent = `Auto-sync every ${data.sync_interval_hours}h`;
-                    btn.style.display = 'inline-block';
-                } else {
-                    indicator.className = 'sync-indicator inactive';
-                    statusText.textContent = 'Auto-sync disabled (no credentials)';
-                    btn.style.display = 'none';
-                }
-                
-                if (data.last_sync) {
-                    const d = new Date(data.last_sync);
-                    lastSync.textContent = `Last sync: ${d.toLocaleString()}`;
-                }
-            } catch (e) {
-                console.error('Failed to load sync status', e);
-            }
-        }
-        
-        async function triggerSync() {
-            const btn = document.getElementById('syncBtn');
-            btn.textContent = 'Syncing...';
-            btn.disabled = true;
-            
-            try {
-                const res = await fetch('/api/sync/now', { method: 'POST' });
-                const data = await res.json();
-                alert(data.message);
-                await loadAllData();
-            } catch (e) {
-                alert('Sync failed: ' + e.message);
-            } finally {
-                btn.textContent = 'Sync Now';
-                btn.disabled = false;
-                loadSyncStatus();
-            }
-        }
-        
-        async function loadSummary() {
-            const res = await fetch('/api/summary');
-            const data = await res.json();
-            document.getElementById('statsGrid').innerHTML = `
-                <div class="stat-card"><h3>Total Workouts</h3><div class="value">${data.totals.total_activities || 0}</div></div>
-                <div class="stat-card"><h3>Total Calories</h3><div class="value">${(data.totals.total_calories || 0).toLocaleString()}</div><div class="unit">kcal</div></div>
-                <div class="stat-card"><h3>Running Miles</h3><div class="value">${(data.running.total_miles || 0).toFixed(1)}</div><div class="unit">miles</div></div>
-                <div class="stat-card"><h3>Avg Running Pace</h3><div class="value">${formatPace(data.running.avg_pace)}</div><div class="unit">/mile</div></div>
-                <div class="stat-card"><h3>Best Pace</h3><div class="value">${formatPace(data.running.best_pace)}</div><div class="unit">/mile</div></div>
-                <div class="stat-card"><h3>Total Reps</h3><div class="value">${(data.strength.total_reps || 0).toLocaleString()}</div><div class="unit">strength</div></div>
-            `;
-        }
-        
-        async function loadPaceChart() {
-            const res = await fetch('/api/running/pace-trend');
-            const data = await res.json();
-            const ctx = document.getElementById('paceChart').getContext('2d');
-            if (paceChart) paceChart.destroy();
-            paceChart = new Chart(ctx, {
-                type: 'line',
-                data: {
-                    labels: data.map(d => d.date?.split('T')[0] || d.date?.split(' ')[0]),
-                    datasets: [{
-                        label: 'Avg Pace', data: data.map(d => d.avg_pace_minutes),
-                        borderColor: '#00d4ff', backgroundColor: 'rgba(0,212,255,0.1)', fill: true, tension: 0.3
-                    }, {
-                        label: 'Best Pace', data: data.map(d => d.best_pace_minutes),
-                        borderColor: '#90EE90', borderDash: [5,5], fill: false, tension: 0.3
-                    }]
-                },
-                options: {
-                    responsive: true, maintainAspectRatio: false,
-                    scales: { y: { reverse: true, title: { display: true, text: 'Pace (min/mile)' },
-                        ticks: { callback: v => formatPace(v) } } },
-                    plugins: { tooltip: { callbacks: { label: ctx => ctx.dataset.label + ': ' + formatPace(ctx.raw) } } }
-                }
-            });
-        }
-        
-        async function loadMileageChart() {
-            const res = await fetch('/api/running/weekly-mileage');
-            const data = await res.json();
-            const ctx = document.getElementById('mileageChart').getContext('2d');
-            if (mileageChart) mileageChart.destroy();
-            mileageChart = new Chart(ctx, {
-                type: 'bar',
-                data: { labels: data.map(d => d.week), datasets: [{
-                    label: 'Weekly Miles', data: data.map(d => d.total_distance),
-                    backgroundColor: 'rgba(0,212,255,0.7)', borderColor: '#00d4ff', borderWidth: 1
-                }] },
-                options: { responsive: true, maintainAspectRatio: false,
-                    scales: { y: { beginAtZero: true, title: { display: true, text: 'Miles' } } } }
-            });
-        }
-        
-        async function loadStrengthCharts() {
-            const res = await fetch('/api/strength/summary');
-            const data = await res.json();
-            
-            const ctx1 = document.getElementById('strengthRepsChart').getContext('2d');
-            if (strengthRepsChart) strengthRepsChart.destroy();
-            strengthRepsChart = new Chart(ctx1, {
-                type: 'bar',
-                data: { labels: data.map(d => d.date?.split('T')[0] || d.date?.split(' ')[0]), datasets: [{
-                    label: 'Total Reps', data: data.map(d => d.total_reps),
-                    backgroundColor: 'rgba(255,182,193,0.7)', borderColor: '#FFB6C1', borderWidth: 1
-                }, {
-                    label: 'Total Sets', data: data.map(d => d.total_sets),
-                    backgroundColor: 'rgba(255,215,0,0.7)', borderColor: '#FFD700', borderWidth: 1
-                }] },
-                options: { responsive: true, maintainAspectRatio: false,
-                    scales: { y: { beginAtZero: true, title: { display: true, text: 'Count' } } } }
-            });
-            
-            const ctx2 = document.getElementById('strengthDurationChart').getContext('2d');
-            if (strengthDurationChart) strengthDurationChart.destroy();
-            strengthDurationChart = new Chart(ctx2, {
-                type: 'line',
-                data: { labels: data.map(d => d.date?.split('T')[0] || d.date?.split(' ')[0]), datasets: [{
-                    label: 'Duration (min)', data: data.map(d => d.duration_minutes),
-                    borderColor: '#FFB6C1', backgroundColor: 'rgba(255,182,193,0.1)', fill: true, tension: 0.3, yAxisID: 'y'
-                }, {
-                    label: 'Calories', data: data.map(d => d.calories),
-                    borderColor: '#FFD700', fill: false, tension: 0.3, yAxisID: 'y1'
-                }] },
-                options: { responsive: true, maintainAspectRatio: false, scales: {
-                    y: { type: 'linear', position: 'left', title: { display: true, text: 'Duration (min)' }, beginAtZero: true },
-                    y1: { type: 'linear', position: 'right', title: { display: true, text: 'Calories' }, beginAtZero: true, grid: { drawOnChartArea: false } }
-                } }
-            });
-        }
-        
-        async function loadActivities() {
-            const res = await fetch('/api/activities?limit=20');
-            const data = await res.json();
-            document.getElementById('activitiesBody').innerHTML = data.map(a => `
-                <tr>
-                    <td>${a.date ? (a.date.split('T')[0] || a.date.split(' ')[0]) : '--'}</td>
-                    <td><span class="activity-type ${getTypeClass(a.activity_type)}">${a.activity_type}</span></td>
-                    <td>${a.title || '--'}</td>
-                    <td>${formatDuration(a.duration_minutes)}</td>
-                    <td>${a.distance ? a.distance.toFixed(2) + ' mi' : '--'}</td>
-                    <td>${a.calories || '--'}</td>
-                    <td>${a.avg_hr || '--'}</td>
-                </tr>
-            `).join('');
-        }
-        
-        async function loadAllData() {
-            await Promise.all([loadSyncStatus(), loadSummary(), loadPaceChart(), loadMileageChart(), loadStrengthCharts(), loadActivities()]);
-        }
-        
-        loadAllData();
-    </script>
-</body>
-</html>
-"""
 
 if __name__ == "__main__":
     import uvicorn
