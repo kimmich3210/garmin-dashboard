@@ -143,6 +143,17 @@
         <!-- Metrics will be loaded here -->
     </div>
 
+    <!-- Resting Heart Rate Section -->
+    <div class="section">
+        <h2>❤️ Resting Heart Rate (Last 14 Days)</h2>
+        <div class="charts-grid">
+            <div class="chart-container" style="grid-column: 1 / -1;">
+                <h3>Hvilepuls (BPM)</h3>
+                <div class="chart-wrapper"><canvas id="rhrChart"></canvas></div>
+            </div>
+        </div>
+    </div>
+
     <div class="section">
         <h2>🏃 Running Analytics</h2>
         <div class="charts-grid">
@@ -199,7 +210,7 @@
         Chart.defaults.color = '#888';
         Chart.defaults.borderColor = '#333';
 
-        let runVolumeChart, runHeatmapChart, strengthDurationChart, strengthRepsChart, strengthCaloriesChart, otherActivitiesChart;
+        let runVolumeChart, runHeatmapChart, strengthDurationChart, strengthRepsChart, strengthCaloriesChart, otherActivitiesChart, rhrChart;
         let currentStartDate = null;
         let currentEndDate = null;
 
@@ -296,7 +307,6 @@
         }
 
         function formatWeekLabel(weekStr) {
-            // Convert "2025-40" to "Week of Oct 6"
             const [year, week] = weekStr.split('-').map(Number);
             const jan4 = new Date(year, 0, 4);
             const weekStart = new Date(jan4);
@@ -304,6 +314,42 @@
             const month = weekStart.toLocaleDateString('en-US', { month: 'short' });
             const day = weekStart.getDate();
             return `${month} ${day}`;
+        }
+
+        async function loadRHRChart() {
+            try {
+                const res = await fetch('/api/health/resting-hr');
+                const data = await res.json();
+                const ctx = document.getElementById('rhrChart').getContext('2d');
+                if (rhrChart) rhrChart.destroy();
+                
+                rhrChart = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: data.map(d => d.date),
+                        datasets: [{
+                            label: 'Hvilepuls (bpm)',
+                            data: data.map(d => d.resting_hr),
+                            borderColor: '#f87171',
+                            backgroundColor: 'rgba(248, 113, 113, 0.1)',
+                            fill: true,
+                            tension: 0.3
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            y: { 
+                                beginAtZero: false, 
+                                title: { display: true, text: 'BPM' } 
+                            }
+                        }
+                    }
+                });
+            } catch (e) {
+                console.error('Failed to load RHR chart', e);
+            }
         }
 
         async function loadRunVolumeChart() {
@@ -356,12 +402,10 @@
             const res = await fetch(url);
             const data = await res.json();
 
-            // Group by day and hour - focus on key time periods
             const dayOrder = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
             const dayMap = {'Monday': 0, 'Tuesday': 1, 'Wednesday': 2, 'Thursday': 3, 'Friday': 4, 'Saturday': 5, 'Sunday': 6};
             const hourRanges = ['5-7 AM', '7-9 AM', '9-11 AM', '11 AM-1 PM', '1-3 PM', '3-5 PM', '5-7 PM', '7-9 PM'];
 
-            // Create 2D array for heatmap
             const heatmapData = Array(7).fill(0).map(() => Array(8).fill(0));
 
             data.forEach(row => {
@@ -369,7 +413,6 @@
                 const dayIdx = dayMap[row.day_of_week];
                 if (dayIdx === undefined) return;
 
-                // Map hours to ranges
                 let rangeIdx = -1;
                 if (hour >= 5 && hour < 7) rangeIdx = 0;
                 else if (hour >= 7 && hour < 9) rangeIdx = 1;
@@ -385,16 +428,12 @@
                 }
             });
 
-            // Find max for color scaling
-            const maxCount = Math.max(...heatmapData.flat());
-
-            // Create bar datasets for each time range
             const datasets = hourRanges.map((range, rangeIdx) => {
                 return {
                     label: range,
                     data: dayOrder.map((_, dayIdx) => heatmapData[dayIdx][rangeIdx]),
                     backgroundColor: hourRanges.map((_, idx) => {
-                        const hue = 190 + (idx * 15); // Vary from cyan to blue
+                        const hue = 190 + (idx * 15);
                         return `hsla(${hue}, 80%, 60%, 0.8)`;
                     })[rangeIdx],
                     borderColor: hourRanges.map((_, idx) => {
@@ -417,35 +456,8 @@
                     responsive: true,
                     maintainAspectRatio: false,
                     scales: {
-                        x: {
-                            stacked: true,
-                            title: { display: true, text: 'Day of Week' }
-                        },
-                        y: {
-                            stacked: true,
-                            beginAtZero: true,
-                            title: { display: true, text: 'Number of Runs' }
-                        }
-                    },
-                    plugins: {
-                        tooltip: {
-                            callbacks: {
-                                label: function(context) {
-                                    const count = context.parsed.y;
-                                    if (count === 0) return null;
-                                    return `${context.dataset.label}: ${count} run${count !== 1 ? 's' : ''}`;
-                                }
-                            }
-                        },
-                        legend: {
-                            display: true,
-                            position: 'bottom',
-                            labels: {
-                                boxWidth: 15,
-                                padding: 10,
-                                font: { size: 10 }
-                            }
-                        }
+                        x: { stacked: true, title: { display: true, text: 'Day of Week' } },
+                        y: { stacked: true, beginAtZero: true, title: { display: true, text: 'Number of Runs' } }
                     }
                 }
             });
@@ -644,19 +656,17 @@
             const res = await fetch(url);
             const data = await res.json();
 
-            // Get unique activity types
             const activityTypes = [...new Set(data.flatMap(week =>
                 week.activities.map(a => a.activity_type)
             ))];
 
-            // Create datasets for each activity type
             const datasets = activityTypes.map((type, index) => {
                 const colors = [
-                    'rgba(135, 206, 235, 0.7)', // Sky Blue
-                    'rgba(255, 165, 0, 0.7)',    // Orange
-                    'rgba(144, 238, 144, 0.7)',  // Light Green
-                    'rgba(221, 160, 221, 0.7)',  // Plum
-                    'rgba(255, 218, 185, 0.7)',  // Peach
+                    'rgba(135, 206, 235, 0.7)',
+                    'rgba(255, 165, 0, 0.7)',
+                    'rgba(144, 238, 144, 0.7)',
+                    'rgba(221, 160, 221, 0.7)',
+                    'rgba(255, 218, 185, 0.7)',
                 ];
                 return {
                     label: type,
@@ -683,11 +693,7 @@
                     maintainAspectRatio: false,
                     scales: {
                         x: { stacked: true },
-                        y: {
-                            stacked: true,
-                            beginAtZero: true,
-                            title: { display: true, text: 'Duration (minutes)' }
-                        }
+                        y: { stacked: true, beginAtZero: true, title: { display: true, text: 'Duration (minutes)' } }
                     }
                 }
             });
@@ -713,6 +719,7 @@
             await Promise.all([
                 loadSyncStatus(),
                 loadMetrics(),
+                loadRHRChart(),
                 loadRunVolumeChart(),
                 loadRunHeatmapChart(),
                 loadStrengthDurationChart(),
