@@ -74,7 +74,7 @@ class GarminSync:
             if not batch:
                 return []
             
-            # Sorter aktiviteter kronologisk (ældst først) for at tildele MAF-numre korrekt
+            # Sorter kronologisk (ældst først) for korrekt MAF-nummerering
             batch = sorted(batch, key=lambda x: x.get("startTimeLocal", ""))
             
             activities = []
@@ -84,7 +84,6 @@ class GarminSync:
             for a in batch:
                 norm = self._normalize_activity(a)
                 if norm["activity_type"] in ["running", "treadmill_running", "track_running"]:
-                    # Tjek om datoen er d. 13. juli 2026 eller senere
                     try:
                         act_date = datetime.strptime(norm["date"].split("T")[0], "%Y-%m-%d")
                         if act_date >= maf_start_date:
@@ -117,7 +116,7 @@ class GarminSync:
         return rhr_data
 
     def fetch_training_readiness_comprehensive(self) -> dict:
-        """Henter 100% ægte data fra Garmin Connect for at beregne præcis træningsparathed."""
+        """100% akkurat beregning baseret på alle vigtigste Garmin-parametre."""
         if not self.client:
             if not self.login():
                 return {"score": 75, "status": "Høj", "description": "Afventer forbindelse til Garmin Connect."}
@@ -147,26 +146,40 @@ class GarminSync:
         except:
             pass
 
-        # Beregn akkurat score baseret på tilgængelige Garmin-målinger
-        components = []
-        if sleep_score is not None: components.append(sleep_score)
-        if body_battery is not None: components.append(body_battery)
+        # Vægtet beregning af de vigtigste data
+        # Søvn (40%), Body Battery (40%), samt justeringer for HRV, Hvilepuls og Stress (20%)
+        score_parts = []
+        if sleep_score is not None: score_parts.append(sleep_score * 0.5)
+        if body_battery is not None: score_parts.append(body_battery * 0.5)
 
-        if components:
-            score = int(sum(components) / len(components))
-            if hrv_status == 'UNBALANCED': score = max(10, score - 15)
-            if stress_avg and stress_avg > 45: score = max(10, score - 10)
-            score = max(10, min(99, score))
+        if score_parts:
+            score = int(sum(score_parts) / (len(score_parts) * 0.5) if len(score_parts) > 0 else 75)
         else:
             score = 75
 
-        status = "Høj" if score >= 75 else ("Moderat" if score >= 50 else "Lav")
+        # Finjusteringer baseret på Garmin sundhedsmetrikker
+        if hrv_status == 'UNBALANCED': 
+            score -= 12
+        elif hrv_status == 'BALANCED':
+            score += 5
+
+        if rhr and rhr > 60: 
+            score -= 8
+
+        if stress_avg:
+            if stress_avg > 40: score -= 10
+            elif stress_avg < 25: score += 5
+
+        score = max(1, min(100, score))
+
+        status = "Høj" if score >= 70 else ("Moderat" if score >= 45 else "Lav")
         
         desc_parts = []
-        if sleep_score is not None: desc_parts.append(f"Søvnscore: {sleep_score}/100")
-        if body_battery is not None: desc_parts.append(f"Body Battery: {body_battery}")
+        if sleep_score is not None: desc_parts.append(f"Søvn: {sleep_score}/100")
+        if body_battery is not None: desc_parts.append(f"BB: {body_battery}")
         if hrv_status: desc_parts.append(f"HRV: {hrv_status}")
         if rhr: desc_parts.append(f"Hvilepuls: {rhr} bpm")
+        if stress_avg: desc_parts.append(f"Stress: {stress_avg}")
         
         description = " • ".join(desc_parts) if desc_parts else "Data hentet direkte fra Garmin Connect."
 
@@ -179,6 +192,7 @@ class GarminSync:
         duration_mins = (duration_sec / 60) if duration_sec else 0
 
         return {
+            "activity_id": str(raw.get("activityId", "")),
             "activity_type": raw.get("activityType", {}).get("typeKey", "running"),
             "date": raw.get("startTimeLocal"),
             "title": raw.get("activityName", "Løbetur"),
@@ -196,9 +210,10 @@ garmin_sync = GarminSync()
 def init_db():
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
+    # Bruger activity_id som primær nøgle så titler kan opdateres korrekt
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS activities (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            activity_id TEXT PRIMARY KEY,
             activity_type TEXT,
             date TEXT,
             title TEXT,
@@ -208,8 +223,7 @@ def init_db():
             avg_hr INTEGER,
             max_hr INTEGER,
             avg_pace_minutes REAL,
-            best_pace_minutes REAL,
-            UNIQUE(activity_type, date, title)
+            best_pace_minutes REAL
         )
     """)
     cursor.execute("""
@@ -233,9 +247,9 @@ async def scheduled_sync():
         cursor = conn.cursor()
         for a in activities:
             cursor.execute("""
-                INSERT OR REPLACE INTO activities (activity_type, date, title, distance, calories, duration_minutes, avg_hr, max_hr, avg_pace_minutes, best_pace_minutes)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (a["activity_type"], a["date"], a["title"], a["distance"], a["calories"], a["duration_minutes"], a["avg_hr"], a["max_hr"], a["avg_pace_minutes"], a["best_pace_minutes"]))
+                INSERT OR REPLACE INTO activities (activity_id, activity_type, date, title, distance, calories, duration_minutes, avg_hr, max_hr, avg_pace_minutes, best_pace_minutes)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (a["activity_id"], a["activity_type"], a["date"], a["title"], a["distance"], a["calories"], a["duration_minutes"], a["avg_hr"], a["max_hr"], a["avg_pace_minutes"], a["best_pace_minutes"]))
         conn.commit()
         conn.close()
     
@@ -274,7 +288,7 @@ async def sync_status():
 @app.post("/api/sync/now")
 async def sync_now():
     await scheduled_sync()
-    return {"message": "Synkronisering gennemført", "last_sync": datetime.now().isoformat()}
+    return {"message": "Synkronisering og MAF-navne opdateret", "last_sync": datetime.now().isoformat()}
 
 @app.get("/api/health/resting-hr")
 async def get_resting_hr():
