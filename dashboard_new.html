@@ -231,7 +231,7 @@
 
         <!-- Grafer -->
         <div class="card">
-            <div class="card-header"><h3>LØBE-PACE (SIDSTE 30 DAGE)</h3></div>
+            <div class="card-header"><h3>LØBE-PACE (MAF START FRA 13. JULI)</h3></div>
             <div class="chart-wrapper"><canvas id="pace30Chart"></canvas></div>
         </div>
 
@@ -400,7 +400,7 @@
 
         async function triggerSync() {
             const btn = document.getElementById('syncBtn');
-            btn.textContent = 'Synkronisererer...';
+            btn.textContent = 'Synkroniserer...';
             btn.disabled = true;
             try {
                 const res = await fetch('/api/sync/now', { method: 'POST' });
@@ -418,24 +418,30 @@
         async function loadPace30Chart() {
             try {
                 const res = await fetch('/api/running/pace-30days');
-                let data = await res.json();
-                data = processMafTitles(data);
+                let rawData = await res.json();
+                let processed = processMafTitles(rawData);
                 
+                // Filtrer KUN løb fra og med den 13. juli 2026 og frem
+                const mafStartDate = new Date('2026-07-13T00:00:00');
+                const filteredData = processed.filter(d => new Date(d.date) >= mafStartDate);
+
                 const ctx = document.getElementById('pace30Chart').getContext('2d');
                 if (pace30Chart) pace30Chart.destroy();
+                
                 pace30Chart = new Chart(ctx, {
                     type: 'line',
                     data: {
-                        labels: data.map(d => `${d.date.split('T')[0]} (${d.displayTitle})`),
+                        // Viser KUN MAF-navnet på X-akसेन (ingen datoer)
+                        labels: filteredData.map(d => d.displayTitle),
                         datasets: [{
                             label: 'Pace (min/km)',
-                            data: data.map(d => d.avg_pace_min_km),
+                            data: filteredData.map(d => d.avg_pace_min_km),
                             borderColor: '#ef4444', 
                             backgroundColor: 'rgba(239, 68, 68, 0.1)',
                             fill: true, 
-                            tension: 0.3, // Gør kurven blød og pæn
+                            tension: 0.3,
                             borderWidth: 3, 
-                            pointRadius: 5, 
+                            pointRadius: 6, 
                             pointBackgroundColor: '#ef4444',
                             pointBorderColor: '#fff',
                             pointBorderWidth: 2
@@ -446,14 +452,14 @@
                         maintainAspectRatio: false,
                         scales: {
                             y: { 
-                                reverse: true, // Omvendt Y-akse så hurtigere pace (lavere min/km) er øverst
+                                reverse: true, // Lavere min/km (hurtigere) er øverst
                                 grid: { color: '#2a3447' }, 
                                 title: { display: true, text: 'Tempo (Min/km)', color: '#94a3b8' }, 
                                 ticks: { callback: v => formatPace(v) } 
                             },
                             x: { 
                                 grid: { display: false },
-                                ticks: { color: '#94a3b8' }
+                                ticks: { color: '#e2e8f0', font: { weight: 'bold' } }
                             }
                         },
                         plugins: { 
