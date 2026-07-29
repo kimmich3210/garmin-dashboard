@@ -112,26 +112,45 @@
             padding: 2px 4px; border-radius: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left;
         }
 
-        /* Activity Detail */
-        .activity-detail-card {
-            background-color: var(--garmin-card); border-radius: 6px; padding: 20px;
-            border: 1px solid var(--garmin-border); display: none;
+        /* POP-UP MODAL STYLING */
+        .modal-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.7); backdrop-filter: blur(4px);
+            display: flex; align-items: center; justify-content: center;
+            z-index: 1000; opacity: 0; pointer-events: none; transition: opacity 0.2s ease;
         }
-        .activity-detail-card.active { display: block; }
-        .strava-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+        .modal-overlay.active { opacity: 1; pointer-events: auto; }
+        
+        .modal-card {
+            background-color: var(--garmin-card); border-radius: 8px; padding: 25px;
+            width: 90%; max-width: 450px; border: 1px solid var(--garmin-border);
+            box-shadow: 0 10px 25px rgba(0,0,0,0.5); position: relative;
+            transform: translateY(20px); transition: transform 0.2s ease;
+        }
+        .modal-overlay.active .modal-card { transform: translateY(0); }
+
+        .modal-close-btn {
+            position: absolute; top: 15px; right: 15px;
+            background: #12161f; color: var(--garmin-text-muted); border: 1px solid var(--garmin-border);
+            width: 32px; height: 32px; border-radius: 50%; font-size: 1rem; font-weight: bold;
+            display: flex; align-items: center; justify-content: center; cursor: pointer; transition: color 0.2s, border-color 0.2s;
+        }
+        .modal-close-btn:hover { color: #fff; border-color: var(--garmin-cyan); }
+
+        .strava-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; padding-right: 30px; }
         .strava-title-group { display: flex; align-items: center; gap: 10px; }
         .strava-icon { background: var(--garmin-red); color: #fff; font-weight: bold; padding: 4px 8px; border-radius: 4px; font-size: 0.8rem; }
         .strava-title { font-size: 1.1rem; font-weight: bold; color: #fff; }
-        .strava-meta { font-size: 0.8rem; color: var(--garmin-text-muted); margin-bottom: 15px; }
+        .strava-meta { font-size: 0.8rem; color: var(--garmin-text-muted); margin-bottom: 20px; }
         .strava-stats-grid {
-            display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; background: #12161f;
-            padding: 15px; border-radius: 6px; margin-bottom: 15px; text-align: center;
+            display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; background: #12161f;
+            padding: 15px; border-radius: 6px; margin-bottom: 20px; text-align: center;
         }
         .stat-box .label { font-size: 0.75rem; color: var(--garmin-text-muted); }
         .stat-box .value { font-size: 1.2rem; font-weight: bold; color: #fff; margin-top: 4px; }
         .view-details-btn {
-            display: inline-block; background: var(--garmin-red); color: #fff; text-decoration: none;
-            padding: 8px 16px; border-radius: 4px; font-size: 0.85rem; font-weight: bold; transition: opacity 0.2s;
+            display: block; text-align: center; background: var(--garmin-red); color: #fff; text-decoration: none;
+            padding: 10px 16px; border-radius: 4px; font-size: 0.85rem; font-weight: bold; transition: opacity 0.2s;
         }
         .view-details-btn:hover { opacity: 0.9; }
 
@@ -199,24 +218,6 @@
             <div class="calendar-grid" id="calendarGrid"></div>
         </div>
 
-        <!-- Aktivitets Detalje -->
-        <div class="activity-detail-card" id="activityDetailCard">
-            <div class="strava-header">
-                <div class="strava-title-group">
-                    <span class="strava-icon">LØB</span>
-                    <span class="strava-title" id="detTitle">Vælg en dag i kalenderen</span>
-                </div>
-                <a id="detLinkBtn" href="#" class="view-details-btn" style="display: none;">Se fuld analyse →</a>
-            </div>
-            <div class="strava-meta" id="detMeta">Tryk på en dag med løb for at se splits, puls og data.</div>
-            <div class="strava-stats-grid">
-                <div class="stat-box"><div class="label">DISTANCE</div><div class="value" id="detDist">-- km</div></div>
-                <div class="stat-box"><div class="label">TID</div><div class="value" id="detTime">--:--</div></div>
-                <div class="stat-box"><div class="label">PACE</div><div class="value" id="detPace">-- min/km</div></div>
-                <div class="stat-box"><div class="label">PULS</div><div class="value" id="detHr">-- bpm</div></div>
-            </div>
-        </div>
-
         <!-- Sync Control -->
         <div class="controls">
             <div class="sync-status">
@@ -241,6 +242,27 @@
         </div>
     </div>
 
+    <!-- POP-UP MODAL (ÅBNER NÅR MAN KLIKKER PÅ EN DATO) -->
+    <div class="modal-overlay" id="activityModal" onclick="handleModalClick(event)">
+        <div class="modal-card" id="modalCard">
+            <button class="modal-close-btn" onclick="closeModal()">✕</button>
+            <div class="strava-header">
+                <div class="strava-title-group">
+                    <span class="strava-icon">LØB</span>
+                    <span class="strava-title" id="modalTitle">Aktivitet</span>
+                </div>
+            </div>
+            <div class="strava-meta" id="modalMeta">Dato og tidspunkt</div>
+            <div class="strava-stats-grid">
+                <div class="stat-box"><div class="label">DISTANCE</div><div class="value" id="modalDist">-- km</div></div>
+                <div class="stat-box"><div class="label">TID</div><div class="value" id="modalTime">--:--</div></div>
+                <div class="stat-box"><div class="label">PACE</div><div class="value" id="modalPace">-- min/km</div></div>
+                <div class="stat-box"><div class="label">PULS</div><div class="value" id="modalHr">-- bpm</div></div>
+            </div>
+            <a id="modalLinkBtn" href="#" class="view-details-btn">Se fuld analyse →</a>
+        </div>
+    </div>
+
     <script>
         Chart.defaults.color = '#94a3b8';
         Chart.defaults.borderColor = '#2a3447';
@@ -259,7 +281,6 @@
             return `${mins}:${secs.toString().padStart(2, '0')}`;
         }
 
-        // MAF nummerering fra 13. juli 2026
         function processMafTitles(activities) {
             const sorted = [...activities].sort((a, b) => new Date(a.date) - new Date(b.date));
             let mafCount = 1;
@@ -336,7 +357,7 @@
                     }
 
                     grid.innerHTML += `
-                        <div class="cal-cell ${cellClass}" onclick="showActivityDetails('${dateStr}')">
+                        <div class="cal-cell ${cellClass}" onclick="openActivityModal('${dateStr}')">
                             <div class="cal-date">${day}</div>
                             ${badgeHtml}
                         </div>
@@ -345,7 +366,7 @@
             } catch (e) { console.error('Fejl ved indlæsning af kalender', e); }
         }
 
-        function showActivityDetails(dateStr) {
+        function openActivityModal(dateStr) {
             const match = cachedActivities.find(a => {
                 if (!a.date) return false;
                 const actDate = new Date(a.date);
@@ -353,29 +374,35 @@
                 return actDateStr === dateStr;
             });
 
-            const card = document.getElementById('activityDetailCard');
-            const linkBtn = document.getElementById('detLinkBtn');
-            
-            if (!match) {
-                card.classList.remove('active');
-                return;
-            }
+            if (!match) return; // Åbn ikke modal hvis der ikke er nogen aktivitet på dagen
 
-            card.classList.add('active');
-            document.getElementById('detTitle').textContent = match.displayTitle;
+            document.getElementById('modalTitle').textContent = match.displayTitle;
             
             const d = new Date(match.date);
-            document.getElementById('detMeta').textContent = `${d.toLocaleString('da-DK')} • Vallensbæk`;
+            document.getElementById('modalMeta').textContent = `${d.toLocaleString('da-DK')} • Vallensbæk`;
             
             const distKm = match.distance ? (match.distance / 1000).toFixed(2) + ' km' : '-- km';
             const durationMin = match.duration_minutes ? Math.floor(match.duration_minutes) + ' min' : '--';
-            document.getElementById('detDist').textContent = distKm;
-            document.getElementById('detTime').textContent = durationMin;
-            document.getElementById('detPace').textContent = formatPace(match.avg_pace_minutes) + ' min/km';
-            document.getElementById('detHr').textContent = (match.avg_hr || '--') + ' bpm';
+            document.getElementById('modalDist').textContent = distKm;
+            document.getElementById('modalTime').textContent = durationMin;
+            document.getElementById('modalPace').textContent = formatPace(match.avg_pace_minutes) + ' min/km';
+            document.getElementById('modalHr').textContent = (match.avg_hr || '--') + ' bpm';
 
-            linkBtn.style.display = 'inline-block';
-            linkBtn.href = `/activity?date=${dateStr}`;
+            document.getElementById('modalLinkBtn').href = `/activity?date=${dateStr}`;
+
+            // Vis modal med pop-up animation
+            document.getElementById('activityModal').classList.add('active');
+        }
+
+        function closeModal() {
+            document.getElementById('activityModal').classList.remove('active');
+        }
+
+        function handleModalClick(event) {
+            // Luk kun hvis man klikker på selve baggrunden (overlay) og ikke i boksen
+            if (event.target.id === 'activityModal') {
+                closeModal();
+            }
         }
 
         async function loadSyncStatus() {
@@ -422,8 +449,6 @@
                 let processed = processMafTitles(rawData);
                 
                 const mafStartDate = new Date('2026-07-13T00:00:00');
-                
-                // Filtrer KUN fra 13. juli og frem, og behold kun de seneste 30 dage / 15 ture for at undgå at den strækker sig for meget
                 let filteredData = processed.filter(d => new Date(d.date) >= mafStartDate);
                 if (filteredData.length > 15) {
                     filteredData = filteredData.slice(filteredData.length - 15);
