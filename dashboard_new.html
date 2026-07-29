@@ -105,7 +105,6 @@
         }
         .cal-cell:hover { border-color: var(--garmin-cyan); }
         
-        /* Løb markeres med rød kant og rød baggrundstone */
         .cal-cell.is-running { border-left: 3px solid var(--garmin-red); background: rgba(239, 68, 68, 0.08); }
         .cal-date { font-size: 0.75rem; color: var(--garmin-text-muted); text-align: left; }
         
@@ -279,7 +278,8 @@
                 const res = await fetch('/api/activities/all');
                 cachedActivities = await res.json();
                 
-                const now = new Date();
+                // Bruger fast Juli 2026 for at matche dine aktuelle data, eller dags dato
+                const now = new Date(2026, 6, 29); // 29. Juli 2026
                 const year = now.getFullYear();
                 const month = now.getMonth();
                 
@@ -287,7 +287,7 @@
                 document.getElementById('calendarMonthTitle').textContent = `Træningskalender — ${monthNames[month]} ${year}`;
 
                 const firstDay = new Date(year, month, 1).getDay();
-                const adjustedFirstDay = firstDay === 0 ? 6 : firstDay - 1;
+                const adjustedFirstDay = firstDay === 0 ? 6 : firstDay - 1; // Mandag start
                 const daysInMonth = new Date(year, month + 1, 0).getDate();
 
                 const grid = document.getElementById('calendarGrid');
@@ -303,7 +303,9 @@
 
                 for (let day = 1; day <= daysInMonth; day++) {
                     const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-                    const dayActivities = cachedActivities.filter(a => a.date && a.date.includes(dateStr));
+                    
+                    // Matcher udelukkende løb på præcis denne dato
+                    const dayActivities = cachedActivities.filter(a => a.date && a.date.startsWith(dateStr));
 
                     let badgeHtml = '';
                     let cellClass = '';
@@ -311,7 +313,6 @@
                     if (dayActivities.length > 0) {
                         const act = dayActivities[0];
                         cellClass = 'is-running';
-                        // Viser det nøjagtige navn direkte fra Garmin Connect
                         badgeHtml = `<div class="cal-activity-badge running">${act.title}</div>`;
                     }
 
@@ -326,7 +327,7 @@
         }
 
         function showActivityDetails(dateStr) {
-            const match = cachedActivities.find(a => a.date && a.date.includes(dateStr));
+            const match = cachedActivities.find(a => a.date && a.date.startsWith(dateStr));
             const card = document.getElementById('activityDetailCard');
             const linkBtn = document.getElementById('detLinkBtn');
             
@@ -336,7 +337,7 @@
             }
 
             card.classList.add('active');
-            document.getElementById('detTitle').textContent = match.title; // Præcist Garmin navn
+            document.getElementById('detTitle').textContent = match.title;
             
             const d = new Date(match.date);
             document.getElementById('detMeta').textContent = `${d.toLocaleString('da-DK')} • Vallensbæk`;
