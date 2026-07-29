@@ -196,7 +196,6 @@ def init_db():
         )
     """)
     
-    # SIKKERHEDS-BACKUP: Hvis databasen er tom, indsættes dine seneste løb og pulsdata, så skærmen aldrig er tom!
     cursor.execute("SELECT COUNT(*) FROM activities")
     if cursor.fetchone()[0] == 0:
         sample_activities = [
@@ -286,10 +285,13 @@ async def get_resting_hr():
 @app.get("/api/running/pace-30days")
 async def get_running_pace_30days():
     conn = get_db_connection()
+    # FILTRERER KUN LØB (running, treadmill_running, track_running) FRA
     rows = conn.execute("""
         SELECT date, title, distance, avg_pace_minutes as avg_pace_min_km, avg_hr, max_hr
         FROM activities
-        WHERE avg_pace_minutes IS NOT NULL AND avg_pace_minutes > 0
+        WHERE activity_type IN ('running', 'treadmill_running', 'track_running')
+          AND avg_pace_minutes IS NOT NULL 
+          AND avg_pace_minutes > 0
         ORDER BY date ASC
     """).fetchall()
     conn.close()
