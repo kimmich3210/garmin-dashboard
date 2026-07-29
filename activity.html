@@ -147,11 +147,13 @@
         Chart.defaults.borderColor = '#2a3447';
 
         let currentActivityDateStr = '';
+        let hrChartInstance = null;
+        let paceChartInstance = null;
 
         function formatPace(m) {
             if (!m) return '--';
             const mins = Math.floor(m), secs = Math.round((m - mins) * 60);
-            return `${mins}:${secs.toString().padStart(2, '0')} /km`;
+            return `${mins}:${secs.toString().padStart(2, '0')}`;
         }
 
         async function loadActivityDetail() {
@@ -175,7 +177,7 @@
                 const distNum = data.distance ? (data.distance / 1000) : 0;
                 document.getElementById('actDist').textContent = distNum.toFixed(2) + ' km';
                 document.getElementById('actTime').textContent = data.duration_minutes ? Math.floor(data.duration_minutes) + ' min' : '--';
-                document.getElementById('actPace').textContent = formatPace(data.avg_pace_minutes);
+                document.getElementById('actPace').textContent = formatPace(data.avg_pace_minutes) + ' /km';
                 document.getElementById('actHr').textContent = (data.avg_hr || '--') + ' bpm';
 
                 // Generér præcise splits
@@ -184,7 +186,7 @@
                 const tbody = document.getElementById('splitsTableBody');
                 tbody.innerHTML = '';
                 generatedSplits.forEach(s => {
-                    tbody.innerHTML += `<tr><td><strong>${s.km}</strong></td><td>${s.pace} /km</td><td>${s.hr} bpm</td></tr>`;
+                    tbody.innerHTML += `<tr><td><strong>Km ${s.km}</strong></td><td>${s.pace} /km</td><td>${s.hr} bpm</td></tr>`;
                 });
 
                 // --- PULS GRAF MED MAF STREG PÅ 155 ---
@@ -192,7 +194,8 @@
                 let hrValues = generatedSplits.map(s => s.hr);
                 let mafLineData = new Array(generatedSplits.length).fill(155);
 
-                new Chart(hrCtx, {
+                if (hrChartInstance) hrChartInstance.destroy();
+                hrChartInstance = new Chart(hrCtx, {
                     type: 'line',
                     data: {
                         labels: generatedSplits.map(s => `Km ${s.km}`),
@@ -222,7 +225,8 @@
                 });
                 let targetPaceLine = new Array(generatedSplits.length).fill(5.0);
 
-                new Chart(paceCtx, {
+                if (paceChartInstance) paceChartInstance.destroy();
+                paceChartInstance = new Chart(paceCtx, {
                     type: 'line',
                     data: {
                         labels: generatedSplits.map(s => `Km ${s.km}`),
@@ -243,7 +247,7 @@
                     },
                     options: {
                         responsive: true, maintainAspectRatio: false,
-                        scales: { y: { reverse: true, ticks: { callback: v => formatPace(v) } } },
+                        scales: { y: { reverse: true, ticks: { callback: v => formatPace(v) + ' /km' } } },
                         plugins: { legend: { display: true } }
                     }
                 });
@@ -261,10 +265,10 @@
             for (let i = 1; i <= fullKm; i++) {
                 let paceVariation = avgPace + ((Math.sin(i * 1.5) * 0.25));
                 let hrVariation = Math.round(avgHr + (Math.cos(i) * 4));
-                splits.push({ km: i, pace: formatPace(paceVariation).replace(' /km',''), hr: hrVariation });
+                splits.push({ km: i, pace: formatPace(paceVariation), hr: hrVariation });
             }
             if (remainder > 0.05) {
-                splits.push({ km: remainder.toFixed(2), pace: formatPace(avgPace).replace(' /km',''), hr: Math.round(avgHr) });
+                splits.push({ km: remainder.toFixed(2), pace: formatPace(avgPace), hr: Math.round(avgHr) });
             }
             return splits;
         }
