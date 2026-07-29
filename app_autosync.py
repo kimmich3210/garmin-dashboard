@@ -190,10 +190,11 @@ class GarminSync:
                 ORDER BY date DESC LIMIT 1
             """).fetchone()
 
+            # Sørg for at sortere knivskarpt efter dato faldende (nyeste først)
             strength_row = cursor.execute("""
                 SELECT date, 'Styrketræning' as title, 0 as distance, 0 as duration_minutes, 'strength' as type
                 FROM strength_workouts
-                ORDER BY date DESC LIMIT 1
+                ORDER BY datetime(date) DESC LIMIT 1
             """).fetchone()
             
             conn.close()
@@ -222,10 +223,10 @@ class GarminSync:
                 
                 if latest_act["type"] == "strength":
                     if days_ago == 0:
-                        recent_penalty = 10
+                        recent_penalty = 12  # Hårdere straf for træning lavet i dag
                         last_activity_text = "Sidste træning: Styrketræning i dag"
                     elif days_ago == 1:
-                        recent_penalty = 6
+                        recent_penalty = 8   # Straffen dagen efter
                         last_activity_text = "Sidste træning: Styrketræning i går"
                     else:
                         recent_penalty = max(0, int(8 / days_ago))
