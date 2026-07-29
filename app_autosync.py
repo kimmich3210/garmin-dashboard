@@ -125,9 +125,20 @@ class GarminSync:
             try:
                 data = self.client.get_hrv_data(date_str)
                 if data and "hrvSummary" in data:
-                    val = data["hrvSummary"].get("weeklyAverage") or data["hrvSummary"].get("lastNightAvg")
+                    summary = data["hrvSummary"]
+                    val = summary.get("weeklyAverage") or summary.get("lastNightAvg")
+                    
+                    baseline = summary.get("baseline", {})
+                    low = baseline.get("balancedLow")
+                    high = baseline.get("balancedUpper")
+
                     if val:
-                        hrv_data.append({"date": date_str, "hrv": val})
+                        hrv_data.append({
+                            "date": date_str, 
+                            "hrv": val,
+                            "baseline_low": low,
+                            "baseline_high": high
+                        })
             except:
                 pass
         return sorted(hrv_data, key=lambda x: x["date"])

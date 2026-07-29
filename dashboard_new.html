@@ -42,7 +42,7 @@
         .garmin-header {
             display: flex;
             flex-direction: column;
-            gap: 10px;
+            gap: 12px;
             background-color: var(--garmin-card);
             padding: 12px;
             border-radius: 8px;
@@ -61,13 +61,22 @@
         .brand-title h1 { font-size: 1rem; color: #fff; font-weight: 600; }
         .brand-title p { font-size: 0.75rem; color: var(--garmin-text-muted); }
 
+        .header-actions {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            width: 100%;
+        }
+        @media (min-width: 600px) {
+            .header-actions { width: auto; justify-content: flex-end; }
+        }
+
         .live-date-badge {
             display: inline-flex; align-items: center; gap: 8px;
             font-size: 0.75rem; color: var(--garmin-text-muted); background: #12161f;
             padding: 5px 10px; border-radius: 20px; border: 1px solid var(--garmin-border);
-            align-self: flex-start;
         }
-        @media (min-width: 600px) { .live-date-badge { align-self: auto; } }
 
         .live-dot {
             width: 8px; height: 8px; background-color: var(--garmin-green);
@@ -79,6 +88,18 @@
             0% { transform: scale(0.95); opacity: 0.8; }
             50% { transform: scale(1.2); opacity: 1; }
             100% { transform: scale(0.95); opacity: 0.8; }
+        }
+
+        .sync-status-top { display: flex; align-items: center; gap: 6px; }
+        .sync-indicator { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+        .sync-indicator.active { background: var(--garmin-green); box-shadow: 0 0 5px var(--garmin-green); }
+        .sync-indicator.inactive { background: var(--garmin-red); }
+        .sync-info { font-size: 0.7rem; color: var(--garmin-text-muted); line-height: 1.1; }
+        
+        .sync-btn-top {
+            background-color: var(--garmin-blue); color: #fff; border: none;
+            padding: 6px 12px; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 0.75rem;
+            white-space: nowrap;
         }
 
         .readiness-card {
@@ -191,23 +212,6 @@
             padding: 8px; border-radius: 4px; font-size: 0.8rem; font-weight: bold;
         }
 
-        .controls {
-            display: flex; flex-direction: column; gap: 10px;
-            background-color: var(--garmin-card); padding: 12px; border-radius: 8px; border: 1px solid var(--garmin-border);
-            width: 100%;
-        }
-        @media (min-width: 600px) { .controls { flex-direction: row; justify-content: space-between; align-items: center; } }
-        .sync-status { display: flex; align-items: center; gap: 8px; }
-        .sync-indicator { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
-        .sync-indicator.active { background: var(--garmin-green); box-shadow: 0 0 6px var(--garmin-green); }
-        .sync-indicator.inactive { background: var(--garmin-red); }
-        .sync-info { font-size: 0.75rem; color: var(--garmin-text-muted); }
-        .sync-btn {
-            background-color: var(--garmin-blue); color: #fff; border: none;
-            padding: 8px 14px; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 0.8rem; width: 100%;
-        }
-        @media (min-width: 600px) { .sync-btn { width: auto; } }
-
         .card {
             background-color: var(--garmin-card); border-radius: 8px; padding: 12px; border: 1px solid var(--garmin-border);
             width: 100%;
@@ -229,9 +233,22 @@
                     <p>Kim Brian Enhaynes Lungay</p>
                 </div>
             </div>
-            <div class="live-date-badge" id="todayDateBadge">
-                <span class="live-dot"></span>
-                <span id="dateText">Indlæser dato...</span>
+            
+            <div class="header-actions">
+                <div class="live-date-badge" id="todayDateBadge">
+                    <span class="live-dot"></span>
+                    <span id="dateText">Indlæser dato...</span>
+                </div>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <div class="sync-status-top">
+                        <div class="sync-indicator" id="syncIndicator"></div>
+                        <div class="sync-info">
+                            <div id="syncStatusText">Forbinder...</div>
+                            <div id="lastSyncText"></div>
+                        </div>
+                    </div>
+                    <button class="sync-btn-top" id="syncBtn" onclick="triggerSync()">Synkroniser</button>
+                </div>
             </div>
         </header>
 
@@ -260,21 +277,10 @@
             <div class="chart-wrapper"><canvas id="mafProgressChart"></canvas></div>
         </div>
 
-        <!-- HRV 14 DAGE GRAF (Afløser gammel løbegraf) -->
+        <!-- HRV MED BASELINE-INTERVAL BÅND -->
         <div class="card">
-            <div class="card-header"><h3>HRV / HJERTERYTMEVARIABILITET (SIDSTE 14 DAGE)</h3></div>
+            <div class="card-header"><h3>HRV / HJERTERYTMEVARIABILITET MED BASELINE-ZONE (14 DAGE)</h3></div>
             <div class="chart-wrapper"><canvas id="hrvChart"></canvas></div>
-        </div>
-
-        <div class="controls">
-            <div class="sync-status">
-                <div class="sync-indicator" id="syncIndicator"></div>
-                <div class="sync-info">
-                    <div id="syncStatusText">Forbinder...</div>
-                    <div id="lastSyncText"></div>
-                </div>
-            </div>
-            <button class="sync-btn" id="syncBtn" onclick="triggerSync()">Synkroniser nu</button>
         </div>
 
         <div class="card">
@@ -556,7 +562,7 @@
                 const lastSync = document.getElementById('lastSyncText');
                 if (data.auto_sync_enabled) {
                     indicator.className = 'sync-indicator active';
-                    statusText.textContent = `Auto-sync aktiv (${data.sync_interval_hours}t)`;
+                    statusText.textContent = `Auto-sync (${data.sync_interval_hours}t)`;
                 } else {
                     indicator.className = 'sync-indicator inactive';
                     statusText.textContent = 'Auto-sync deaktiveret';
@@ -579,7 +585,7 @@
             } catch (e) {
                 alert('Sync fejlede: ' + e.message);
             } finally {
-                btn.textContent = 'Synkroniser nu';
+                btn.textContent = 'Synkroniser';
                 btn.disabled = false;
             }
         }
@@ -678,17 +684,40 @@
                     type: 'line',
                     data: {
                         labels: data.map(d => d.date.slice(5)),
-                        datasets: [{
-                            label: 'HRV (ms)',
-                            data: data.map(d => d.hrv),
-                            borderColor: '#22c55e', 
-                            backgroundColor: 'rgba(34, 197, 94, 0.1)',
-                            fill: true, 
-                            tension: 0.3, 
-                            borderWidth: 2, 
-                            pointRadius: 3, 
-                            pointBackgroundColor: '#22c55e'
-                        }]
+                        datasets: [
+                            {
+                                label: 'Baseline Øvre (High)',
+                                data: data.map(d => d.baseline_high),
+                                borderColor: 'rgba(148, 163, 184, 0.4)',
+                                borderDash: [4, 4],
+                                fill: false,
+                                tension: 0.2,
+                                borderWidth: 1.5,
+                                pointRadius: 0
+                            },
+                            {
+                                label: 'Baseline Nedre (Low)',
+                                data: data.map(d => d.baseline_low),
+                                borderColor: 'rgba(148, 163, 184, 0.4)',
+                                borderDash: [4, 4],
+                                fill: '-1', // Fyldfarve op til Øvre baseline for at danne et interval-bånd
+                                backgroundColor: 'rgba(34, 197, 94, 0.06)',
+                                tension: 0.2,
+                                borderWidth: 1.5,
+                                pointRadius: 0
+                            },
+                            {
+                                label: 'Din HRV (ms)',
+                                data: data.map(d => d.hrv),
+                                borderColor: '#22c55e', 
+                                backgroundColor: 'rgba(34, 197, 94, 0.15)',
+                                fill: false, 
+                                tension: 0.3, 
+                                borderWidth: 2.5, 
+                                pointRadius: 4, 
+                                pointBackgroundColor: '#22c55e'
+                            }
+                        ]
                     },
                     options: {
                         responsive: true, maintainAspectRatio: false,
@@ -696,7 +725,7 @@
                             y: { grid: { color: '#2a3447' }, ticks: { font: { size: 10 } }, beginAtZero: false },
                             x: { grid: { display: false }, ticks: { font: { size: 9 }, maxTicksLimit: 7 } }
                         },
-                        plugins: { legend: { display: false } }
+                        plugins: { legend: { display: true, labels: { color: '#e2e8f0', font: { size: 10 } } } }
                     }
                 });
             } catch (e) { console.error(e); }
