@@ -24,37 +24,43 @@
             background-color: var(--garmin-dark);
             color: var(--garmin-text);
             min-height: 100vh;
-            padding: 20px;
+            padding: 10px;
         }
 
         .dashboard-grid {
             display: grid;
             grid-template-columns: 1fr;
-            gap: 20px;
+            gap: 15px;
             max-width: 1000px;
             margin: 0 auto;
         }
 
-        /* Header */
+        /* Header tilpasset mobil */
         .garmin-header {
-            display: flex; justify-content: space-between; align-items: center;
-            background-color: var(--garmin-card); padding: 15px 25px;
-            border-radius: 6px; border-bottom: 3px solid var(--garmin-blue);
+            display: flex; flex-direction: column; gap: 10px;
+            background-color: var(--garmin-card); padding: 15px;
+            border-radius: 8px; border-bottom: 3px solid var(--garmin-blue);
             box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.2);
+        }
+        @media (min-width: 600px) {
+            .garmin-header { flex-direction: row; justify-content: space-between; align-items: center; padding: 15px 25px; }
         }
         .brand { display: flex; align-items: center; gap: 12px; }
         .brand-logo {
-            font-weight: 800; font-size: 1.5rem; letter-spacing: 1px; color: #fff;
+            font-weight: 800; font-size: 1.3rem; letter-spacing: 1px; color: #fff;
             background: var(--garmin-blue); padding: 4px 10px; border-radius: 4px;
         }
-        .brand-title h1 { font-size: 1.2rem; color: #fff; font-weight: 600; }
-        .brand-title p { font-size: 0.8rem; color: var(--garmin-text-muted); }
+        .brand-title h1 { font-size: 1.05rem; color: #fff; font-weight: 600; }
+        .brand-title p { font-size: 0.75rem; color: var(--garmin-text-muted); }
 
         .live-date-badge {
             display: inline-flex; align-items: center; gap: 8px;
-            font-size: 0.85rem; color: var(--garmin-text-muted); background: #12161f;
+            font-size: 0.8rem; color: var(--garmin-text-muted); background: #12161f;
             padding: 6px 12px; border-radius: 20px; border: 1px solid var(--garmin-border);
+            align-self: flex-start;
         }
+        @media (min-width: 600px) { .live-date-badge { align-self: auto; } }
+
         .live-dot {
             width: 8px; height: 8px; background-color: var(--garmin-green);
             border-radius: 50%; display: inline-block;
@@ -69,114 +75,117 @@
 
         /* Training Readiness Widget */
         .readiness-card {
-            background-color: var(--garmin-card); border-radius: 6px; padding: 20px 25px;
+            background-color: var(--garmin-card); border-radius: 8px; padding: 15px;
             border: 1px solid var(--garmin-border); display: flex; align-items: center; justify-content: space-between;
         }
-        .readiness-left h3 { font-size: 0.9rem; color: var(--garmin-text-muted); text-transform: uppercase; margin-bottom: 5px; }
-        .readiness-score-container { display: flex; align-items: baseline; gap: 10px; }
-        .readiness-score { font-size: 2.8rem; font-weight: 700; color: #fff; }
-        .readiness-status { font-size: 1.2rem; font-weight: 600; color: var(--garmin-cyan); }
-        .readiness-desc { font-size: 0.85rem; color: var(--garmin-text-muted); margin-top: 4px; }
+        .readiness-left h3 { font-size: 0.8rem; color: var(--garmin-text-muted); text-transform: uppercase; margin-bottom: 3px; }
+        .readiness-score-container { display: flex; align-items: baseline; gap: 8px; }
+        .readiness-score { font-size: 2.2rem; font-weight: 700; color: #fff; }
+        .readiness-status { font-size: 1rem; font-weight: 600; color: var(--garmin-cyan); }
+        .readiness-desc { font-size: 0.75rem; color: var(--garmin-text-muted); margin-top: 4px; line-height: 1.3; }
         .readiness-circle-badge {
-            width: 75px; height: 75px; border-radius: 50%;
+            width: 60px; height: 60px; border-radius: 50%; flex-shrink: 0;
             background: radial-gradient(circle, #12161f 60%, var(--garmin-cyan) 100%);
             display: flex; align-items: center; justify-content: center;
-            border: 3px solid var(--garmin-cyan); font-weight: bold; font-size: 1.2rem; color: #fff;
+            border: 3px solid var(--garmin-cyan); font-weight: bold; font-size: 1rem; color: #fff;
         }
 
         /* Calendar Section */
         .calendar-card {
-            background-color: var(--garmin-card); border-radius: 6px; padding: 20px;
+            background-color: var(--garmin-card); border-radius: 8px; padding: 15px;
             border: 1px solid var(--garmin-border);
         }
         .calendar-header {
-            display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;
+            display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;
         }
-        .calendar-header h3 { font-size: 1rem; color: #fff; font-weight: 600; text-transform: uppercase; }
+        .calendar-header h3 { font-size: 0.9rem; color: #fff; font-weight: 600; text-transform: uppercase; }
         .calendar-grid {
-            display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; text-align: center;
+            display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; text-align: center;
         }
-        .cal-day-name { font-size: 0.75rem; color: var(--garmin-text-muted); font-weight: bold; padding-bottom: 8px; }
+        .cal-day-name { font-size: 0.7rem; color: var(--garmin-text-muted); font-weight: bold; padding-bottom: 6px; }
         .cal-cell {
             background: #12161f; border: 1px solid var(--garmin-border); border-radius: 4px;
-            min-height: 70px; padding: 6px; display: flex; flex-direction: column; justify-content: space-between;
+            min-height: 55px; padding: 4px; display: flex; flex-direction: column; justify-content: space-between;
             cursor: pointer; transition: border-color 0.2s;
         }
+        @media (min-width: 600px) { .cal-cell { min-height: 70px; padding: 6px; } }
         .cal-cell:hover { border-color: var(--garmin-cyan); }
         
         .cal-cell.is-running { border-left: 3px solid var(--garmin-red); background: rgba(239, 68, 68, 0.08); }
-        .cal-date { font-size: 0.75rem; color: var(--garmin-text-muted); text-align: left; }
+        .cal-date { font-size: 0.7rem; color: var(--garmin-text-muted); text-align: left; }
         
         .cal-activity-badge.running {
-            font-size: 0.65rem; background: rgba(239, 68, 68, 0.2); color: var(--garmin-red);
-            padding: 2px 4px; border-radius: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left;
+            font-size: 0.55rem; background: rgba(239, 68, 68, 0.2); color: var(--garmin-red);
+            padding: 2px 3px; border-radius: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left;
         }
+        @media (min-width: 600px) { .cal-activity-badge.running { font-size: 0.65rem; padding: 2px 4px; } }
 
-        /* POP-UP MODAL STYLING */
+        /* POP-UP MODAL */
         .modal-overlay {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0, 0, 0, 0.7); backdrop-filter: blur(4px);
+            background: rgba(0, 0, 0, 0.75); backdrop-filter: blur(4px);
             display: flex; align-items: center; justify-content: center;
             z-index: 1000; opacity: 0; pointer-events: none; transition: opacity 0.2s ease;
+            padding: 15px;
         }
         .modal-overlay.active { opacity: 1; pointer-events: auto; }
         
         .modal-card {
-            background-color: var(--garmin-card); border-radius: 8px; padding: 25px;
-            width: 90%; max-width: 450px; border: 1px solid var(--garmin-border);
+            background-color: var(--garmin-card); border-radius: 8px; padding: 20px;
+            width: 100%; max-width: 400px; border: 1px solid var(--garmin-border);
             box-shadow: 0 10px 25px rgba(0,0,0,0.5); position: relative;
             transform: translateY(20px); transition: transform 0.2s ease;
         }
         .modal-overlay.active .modal-card { transform: translateY(0); }
 
         .modal-close-btn {
-            position: absolute; top: 15px; right: 15px;
+            position: absolute; top: 12px; right: 12px;
             background: #12161f; color: var(--garmin-text-muted); border: 1px solid var(--garmin-border);
             width: 32px; height: 32px; border-radius: 50%; font-size: 1rem; font-weight: bold;
-            display: flex; align-items: center; justify-content: center; cursor: pointer; transition: color 0.2s, border-color 0.2s;
+            display: flex; align-items: center; justify-content: center; cursor: pointer;
         }
-        .modal-close-btn:hover { color: #fff; border-color: var(--garmin-cyan); }
 
-        .strava-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; padding-right: 30px; }
-        .strava-title-group { display: flex; align-items: center; gap: 10px; }
-        .strava-icon { background: var(--garmin-red); color: #fff; font-weight: bold; padding: 4px 8px; border-radius: 4px; font-size: 0.8rem; }
-        .strava-title { font-size: 1.1rem; font-weight: bold; color: #fff; }
-        .strava-meta { font-size: 0.8rem; color: var(--garmin-text-muted); margin-bottom: 20px; }
+        .strava-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; padding-right: 30px; }
+        .strava-title-group { display: flex; align-items: center; gap: 8px; }
+        .strava-icon { background: var(--garmin-red); color: #fff; font-weight: bold; padding: 3px 6px; border-radius: 4px; font-size: 0.75rem; }
+        .strava-title { font-size: 1rem; font-weight: bold; color: #fff; }
+        .strava-meta { font-size: 0.75rem; color: var(--garmin-text-muted); margin-bottom: 15px; }
         .strava-stats-grid {
-            display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; background: #12161f;
-            padding: 15px; border-radius: 6px; margin-bottom: 20px; text-align: center;
+            display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; background: #12161f;
+            padding: 12px; border-radius: 6px; margin-bottom: 15px; text-align: center;
         }
-        .stat-box .label { font-size: 0.75rem; color: var(--garmin-text-muted); }
-        .stat-box .value { font-size: 1.2rem; font-weight: bold; color: #fff; margin-top: 4px; }
+        .stat-box .label { font-size: 0.7rem; color: var(--garmin-text-muted); }
+        .stat-box .value { font-size: 1.1rem; font-weight: bold; color: #fff; margin-top: 2px; }
         .view-details-btn {
             display: block; text-align: center; background: var(--garmin-red); color: #fff; text-decoration: none;
-            padding: 10px 16px; border-radius: 4px; font-size: 0.85rem; font-weight: bold; transition: opacity 0.2s;
+            padding: 10px; border-radius: 4px; font-size: 0.85rem; font-weight: bold;
         }
-        .view-details-btn:hover { opacity: 0.9; }
 
         /* Controls */
         .controls {
-            display: flex; justify-content: space-between; align-items: center;
-            background-color: var(--garmin-card); padding: 12px 20px; border-radius: 6px; border: 1px solid var(--garmin-border);
+            display: flex; flex-direction: column; gap: 10px;
+            background-color: var(--garmin-card); padding: 15px; border-radius: 8px; border: 1px solid var(--garmin-border);
         }
+        @media (min-width: 600px) { .controls { flex-direction: row; justify-content: space-between; align-items: center; } }
         .sync-status { display: flex; align-items: center; gap: 10px; }
-        .sync-indicator { width: 9px; height: 9px; border-radius: 50%; }
+        .sync-indicator { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
         .sync-indicator.active { background: var(--garmin-green); box-shadow: 0 0 8px var(--garmin-green); }
         .sync-indicator.inactive { background: var(--garmin-red); }
-        .sync-info { font-size: 0.85rem; color: var(--garmin-text-muted); }
+        .sync-info { font-size: 0.8rem; color: var(--garmin-text-muted); }
         .sync-btn {
             background-color: var(--garmin-blue); color: #fff; border: none;
-            padding: 8px 16px; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 0.85rem;
+            padding: 10px 16px; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 0.85rem; width: 100%;
         }
-        .sync-btn:hover { background-color: #005fa3; }
+        @media (min-width: 600px) { .sync-btn { width: auto; } }
 
         /* Charts */
         .card {
-            background-color: var(--garmin-card); border-radius: 6px; padding: 20px; border: 1px solid var(--garmin-border);
+            background-color: var(--garmin-card); border-radius: 8px; padding: 15px; border: 1px solid var(--garmin-border);
         }
-        .card-header { border-bottom: 1px solid var(--garmin-border); padding-bottom: 10px; margin-bottom: 15px; }
-        .card-header h3 { font-size: 1rem; color: #fff; font-weight: 600; }
-        .chart-wrapper { position: relative; height: 320px; width: 100%; }
+        .card-header { border-bottom: 1px solid var(--garmin-border); padding-bottom: 8px; margin-bottom: 12px; }
+        .card-header h3 { font-size: 0.9rem; color: #fff; font-weight: 600; text-transform: uppercase; }
+        .chart-wrapper { position: relative; height: 260px; width: 100%; }
+        @media (min-width: 600px) { .chart-wrapper { height: 320px; } }
     </style>
 </head>
 <body>
@@ -188,7 +197,7 @@
                 <div class="brand-logo">GARMIN</div>
                 <div class="brand-title">
                     <h1>Løbe & Puls Dashboard</h1>
-                    <p>Kim Brian Enhaynes Lungay | Mål: Pace &lt; 5:00 min/km</p>
+                    <p>Kim Brian Enhaynes Lungay</p>
                 </div>
             </div>
             <div class="live-date-badge" id="todayDateBadge">
@@ -200,7 +209,7 @@
         <!-- Training Readiness -->
         <div class="readiness-card">
             <div class="readiness-left">
-                <h3 id="readinessTitle">Træningsparathed</h3>
+                <h3>Træningsparathed</h3>
                 <div class="readiness-score-container">
                     <div class="readiness-score" id="readinessScore">--%</div>
                     <div class="readiness-status" id="readinessStatus">Opdaterer...</div>
@@ -232,7 +241,7 @@
 
         <!-- Grafer -->
         <div class="card">
-            <div class="card-header"><h3>LØBE-PACE (SIDSTE 30 DAGE / SENESTE MAF-LØB)</h3></div>
+            <div class="card-header"><h3>LØBE-PACE (HVER 30 DAG / MAF FRA 13. JULI)</h3></div>
             <div class="chart-wrapper"><canvas id="pace30Chart"></canvas></div>
         </div>
 
@@ -242,7 +251,7 @@
         </div>
     </div>
 
-    <!-- POP-UP MODAL (ÅBNER NÅR MAN KLIKKER PÅ EN DATO) -->
+    <!-- POP-UP MODAL -->
     <div class="modal-overlay" id="activityModal" onclick="handleModalClick(event)">
         <div class="modal-card" id="modalCard">
             <button class="modal-close-btn" onclick="closeModal()">✕</button>
@@ -374,10 +383,9 @@
                 return actDateStr === dateStr;
             });
 
-            if (!match) return; // Åbn ikke modal hvis der ikke er nogen aktivitet på dagen
+            if (!match) return;
 
             document.getElementById('modalTitle').textContent = match.displayTitle;
-            
             const d = new Date(match.date);
             document.getElementById('modalMeta').textContent = `${d.toLocaleString('da-DK')} • Vallensbæk`;
             
@@ -389,21 +397,11 @@
             document.getElementById('modalHr').textContent = (match.avg_hr || '--') + ' bpm';
 
             document.getElementById('modalLinkBtn').href = `/activity?date=${dateStr}`;
-
-            // Vis modal med pop-up animation
             document.getElementById('activityModal').classList.add('active');
         }
 
-        function closeModal() {
-            document.getElementById('activityModal').classList.remove('active');
-        }
-
-        function handleModalClick(event) {
-            // Luk kun hvis man klikker på selve baggrunden (overlay) og ikke i boksen
-            if (event.target.id === 'activityModal') {
-                closeModal();
-            }
-        }
+        function closeModal() { document.getElementById('activityModal').classList.remove('active'); }
+        function handleModalClick(event) { if (event.target.id === 'activityModal') closeModal(); }
 
         async function loadSyncStatus() {
             try {
@@ -450,9 +448,11 @@
                 
                 const mafStartDate = new Date('2026-07-13T00:00:00');
                 let filteredData = processed.filter(d => new Date(d.date) >= mafStartDate);
-                if (filteredData.length > 15) {
-                    filteredData = filteredData.slice(filteredData.length - 15);
-                }
+
+                // Filtrer til løb inden for de sidste 30 dage
+                const thirtyDaysAgo = new Date();
+                thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+                filteredData = filteredData.filter(d => new Date(d.date) >= thirtyDaysAgo);
 
                 const ctx = document.getElementById('pace30Chart').getContext('2d');
                 if (pace30Chart) pace30Chart.destroy();
