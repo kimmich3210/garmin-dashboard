@@ -231,7 +231,7 @@
 
         <!-- Grafer -->
         <div class="card">
-            <div class="card-header"><h3>LØBE-PACE (MAF START FRA 13. JULI)</h3></div>
+            <div class="card-header"><h3>LØBE-PACE (SIDSTE 30 DAGE / SENESTE MAF-LØB)</h3></div>
             <div class="chart-wrapper"><canvas id="pace30Chart"></canvas></div>
         </div>
 
@@ -421,9 +421,13 @@
                 let rawData = await res.json();
                 let processed = processMafTitles(rawData);
                 
-                // Filtrer KUN løb fra og med den 13. juli 2026 og frem
                 const mafStartDate = new Date('2026-07-13T00:00:00');
-                const filteredData = processed.filter(d => new Date(d.date) >= mafStartDate);
+                
+                // Filtrer KUN fra 13. juli og frem, og behold kun de seneste 30 dage / 15 ture for at undgå at den strækker sig for meget
+                let filteredData = processed.filter(d => new Date(d.date) >= mafStartDate);
+                if (filteredData.length > 15) {
+                    filteredData = filteredData.slice(filteredData.length - 15);
+                }
 
                 const ctx = document.getElementById('pace30Chart').getContext('2d');
                 if (pace30Chart) pace30Chart.destroy();
@@ -431,7 +435,6 @@
                 pace30Chart = new Chart(ctx, {
                     type: 'line',
                     data: {
-                        // Viser KUN MAF-navnet på X-akसेन (ingen datoer)
                         labels: filteredData.map(d => d.displayTitle),
                         datasets: [{
                             label: 'Pace (min/km)',
@@ -452,7 +455,7 @@
                         maintainAspectRatio: false,
                         scales: {
                             y: { 
-                                reverse: true, // Lavere min/km (hurtigere) er øverst
+                                reverse: true, 
                                 grid: { color: '#2a3447' }, 
                                 title: { display: true, text: 'Tempo (Min/km)', color: '#94a3b8' }, 
                                 ticks: { callback: v => formatPace(v) } 
