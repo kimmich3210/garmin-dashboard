@@ -74,7 +74,6 @@ class GarminSync:
             if not batch:
                 return []
             
-            # Sorter kronologisk (ældst først) for korrekt MAF-nummerering
             batch = sorted(batch, key=lambda x: x.get("startTimeLocal", ""))
             
             activities = []
@@ -116,7 +115,7 @@ class GarminSync:
         return rhr_data
 
     def fetch_training_readiness_comprehensive(self) -> dict:
-        """100% akkurat beregning baseret på alle vigtigste Garmin-parametre."""
+        """Inkluderer søvn, Body Battery, HRV, stress, hvilepuls OG seneste løbeture/belastning."""
         if not self.client:
             if not self.login():
                 return {"score": 75, "status": "Høj", "description": "Afventer forbindelse til Garmin Connect."}
@@ -146,8 +145,39 @@ class GarminSync:
         except:
             pass
 
-        # Vægtet beregning af de vigtigste data
-        # Søvn (40%), Body Battery (40%), samt justeringer for HRV, Hvilepuls og Stress (20%)
+        # Tjek seneste løb i databasen for at vurdere træningsbelastning
+        recent_run_penalty = 0
+        last_run_text = "Ingen nyere løb"
+        try:
+            conn = sqlite3.connect(DB_PATH)
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            row = cursor.execute("""
+                SELECT date, title, distance, duration_minutes 
+                FROM activities 
+                WHERE activity_type IN ('running', 'treadmill_running', 'track_running') 
+                ORDER BY date DESC LIMIT 1
+            """).fetchone()
+            conn.close()
+
+            if row:
+                run_date = datetime.strptime(row["date"].split("T")[0], "%Y-%m-%d")
+                days_ago = (datetime.now() - run_date).days
+                dist_km = (row["distance"] or 0) / 1000
+                
+                if days_ago == 0:
+                    recent_run_penalty = int(dist_km * 1.5) # Hård straf hvis løbet i dag
+                    last_run_text = f"Løbet i dag ({dist_km:.1f} km)"
+                elif days_ago == 1:
+                    recent_run_penalty = int(dist_km * 0.8) # Lettere straf for gårsdagens løb
+                    last_run_text = f"Seneste løb i går ({dist_km:.1f} km)"
+                elif days_ago <= 2:
+                    recent_run_penalty = int(dist_km * 0.3)
+                    last_run_text = f"Seneste løb for {days_ago} dage siden ({dist_km:.1f} km)"
+        except:
+            pass
+
+        # Basis beregning ud fra Body Battery og Søvn
         score_parts = []
         if sleep_score is not None: score_parts.append(sleep_score * 0.5)
         if body_battery is not None: score_parts.append(body_battery * 0.5)
@@ -157,31 +187,28 @@ class GarminSync:
         else:
             score = 75
 
-        # Finjusteringer baseret på Garmin sundhedsmetrikker
-        if hrv_status == 'UNBALANCED': 
-            score -= 12
-        elif hrv_status == 'BALANCED':
-            score += 5
+        # Træk fra for seneste træningsbelastning
+        score -= recent_run_penalty
 
-        if rhr and rhr > 60: 
-            score -= 8
+        # Finjusteringer baseret på HRV, hvilepuls og stress
+        if hrv_status == 'UNBALANCED': score -= 12
+        elif hrv_status == 'BALANCED': score += 5
 
+        if rhr and rhr > 60: score -= 8
         if stress_avg:
             if stress_avg > 40: score -= 10
             elif stress_avg < 25: score += 5
 
         score = max(1, min(100, score))
-
         status = "Høj" if score >= 70 else ("Moderat" if score >= 45 else "Lav")
         
         desc_parts = []
         if sleep_score is not None: desc_parts.append(f"Søvn: {sleep_score}/100")
         if body_battery is not None: desc_parts.append(f"BB: {body_battery}")
+        desc_parts.append(last_run_text)
         if hrv_status: desc_parts.append(f"HRV: {hrv_status}")
-        if rhr: desc_parts.append(f"Hvilepuls: {rhr} bpm")
-        if stress_avg: desc_parts.append(f"Stress: {stress_avg}")
-        
-        description = " • ".join(desc_parts) if desc_parts else "Data hentet direkte fra Garmin Connect."
+
+        description = " • ".join(desc_parts)
 
         return {"score": score, "status": status, "description": description}
 
@@ -210,7 +237,6 @@ garmin_sync = GarminSync()
 def init_db():
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
-    # Bruger activity_id som primær nøgle så titler kan opdateres korrekt
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS activities (
             activity_id TEXT PRIMARY KEY,
@@ -288,7 +314,7 @@ async def sync_status():
 @app.post("/api/sync/now")
 async def sync_now():
     await scheduled_sync()
-    return {"message": "Synkronisering og MAF-navne opdateret", "last_sync": datetime.now().isoformat()}
+    return {"message": "Træningsparathed opdateret med seneste løb", "last_sync": datetime.now().isoformat()}
 
 @app.get("/api/health/resting-hr")
 async def get_resting_hr():
