@@ -148,13 +148,12 @@ class GarminSync:
         last_activity_text = "Ingen aktivitet fundet"
         latest_act = None
 
-        # Tjek efter seneste løb i databasen
         try:
             conn = sqlite3.connect(DB_PATH)
             conn.row_factory = sqlite3.Row
             cursor = conn.cursor()
             row = cursor.execute("""
-                SELECT date, title, distance, duration_minutes, 'running' as type
+                SELECT date, title, distance, duration_minutes 
                 FROM activities 
                 WHERE activity_type IN ('running', 'treadmill_running', 'track_running')
                 ORDER BY date DESC LIMIT 1
@@ -162,7 +161,7 @@ class GarminSync:
             conn.close()
 
             if row:
-                latest_act = {"date": row["date"], "distance": row["distance"], "type": "running"}
+                latest_act = {"date": row["date"], "distance": row["distance"]}
         except:
             pass
 
@@ -268,6 +267,13 @@ def init_db():
             resting_hr INTEGER
         )
     """)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS strength_workouts (
+            activity_id TEXT PRIMARY KEY,
+            date TEXT,
+            exercises TEXT
+        )
+    """)
     conn.commit()
     conn.close()
 
@@ -361,6 +367,40 @@ async def get_all_activities():
     """).fetchall()
     conn.close()
     return [dict(row) for row in rows]
+
+@app.get("/api/strength/all")
+async def get_all_strength():
+    conn = get_db_connection()
+    rows = conn.execute("SELECT * FROM strength_workouts").fetchall()
+    conn.close()
+    
+    result = []
+    for row in rows:
+        item = dict(row)
+        try:
+            item["exercises"] = json.loads(item["exercises"])
+        except:
+            item["exercises"] = {}
+        result.append(item)
+    return result
+
+@app.post("/api/strength/save")
+async def save_strength(data: dict):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    act_id = data.get("activity_id", f"strength_{datetime.now().timestamp()}")
+    date_str = data.get("date")
+    exercises_json = json.dumps(data.get("exercises", {}))
+    
+    cursor.execute("""
+        INSERT OR REPLACE INTO strength_workouts (activity_id, date, exercises)
+        VALUES (?, ?, ?)
+    """, (act_id, date_str, exercises_json))
+    
+    conn.commit()
+    conn.close()
+    return {"message": "Styrketræning gemt succesfuldt på serveren"}
 
 @app.get("/api/activity/{date_str}")
 async def get_activity_by_date(date_str: str):
