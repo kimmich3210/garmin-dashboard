@@ -127,15 +127,15 @@
             </div>
         </header>
 
-        <!-- TRAINING READINESS WIDGET (ØVERST) -->
+        <!-- TRAINING READINESS WIDGET (ØVERST) MED DATO -->
         <div class="readiness-card">
             <div class="readiness-left">
-                <h3>Træningsparathed (Training Readiness)</h3>
+                <h3 id="readinessTitle">Træningsparathed</h3>
                 <div class="readiness-score-container">
                     <div class="readiness-score" id="readinessScore">--%</div>
-                    <div class="readiness-status" id="readinessStatus">Udreregner...</div>
+                    <div class="readiness-status" id="readinessStatus">Opdaterer...</div>
                 </div>
-                <div class="readiness-desc" id="readinessDesc">Henter hvilepuls og træningsbelastning</div>
+                <div class="readiness-desc" id="readinessDesc">Henter biometriske data...</div>
             </div>
             <div class="readiness-circle-badge" id="readinessBadge">--%</div>
         </div>
@@ -180,6 +180,10 @@
 
         async function loadReadiness() {
             try {
+                // Sæt dags dato pænt ind i overskriften
+                const todayFormatted = new Date().toLocaleDateString('da-DK', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+                document.getElementById('readinessTitle').textContent = `Træningsparathed — ${todayFormatted}`;
+
                 const res = await fetch('/api/training/readiness');
                 const data = await res.json();
                 document.getElementById('readinessScore').textContent = `${data.score}%`;
