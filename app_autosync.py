@@ -389,7 +389,8 @@ async def save_strength(data: dict):
     conn = get_db_connection()
     cursor = conn.cursor()
     
-    act_id = data.get("activity_id", f"strength_{datetime.now().timestamp()}")
+    date_val = data.get("date", "").split("T")[0]
+    act_id = f"strength_{date_val}"
     date_str = data.get("date")
     exercises_json = json.dumps(data.get("exercises", {}))
     
