@@ -379,7 +379,6 @@ async def get_all_activities():
     conn.close()
     return [dict(row) for row in rows]
 
-# --- NYT HISTORIK ENDPOINT TIL AI ---
 @app.get("/api/activities/history")
 async def get_activities_history():
     """Henter alle tidligere aktiviteter til historisk sammenligning i AI."""
@@ -387,6 +386,76 @@ async def get_activities_history():
     rows = conn.execute("SELECT * FROM activities ORDER BY date DESC LIMIT 30").fetchall()
     conn.close()
     return [dict(row) for row in rows]
+
+@app.get("/api/ai/analyze/{date_str}")
+async def ai_analyze_activity(date_str: str):
+    """Genererer en avanceret Strava-stil Athlete Intelligence analyse baseret på alle data og historik."""
+    conn = get_db_connection()
+    
+    row = conn.execute("SELECT * FROM activities WHERE date LIKE ? LIMIT 1", (f"{date_str}%",)).fetchone()
+    if not row:
+        conn.close()
+        raise HTTPException(404, "Aktivitet ikke fundet")
+    current = dict(row)
+    
+    history_rows = conn.execute("""
+        SELECT * FROM activities 
+        WHERE activity_type IN ('running', 'treadmill_running', 'track_running') 
+        ORDER BY date DESC LIMIT 30
+    """).fetchall()
+    history = [dict(r) for r in history_rows]
+    conn.close()
+
+    dist_km = (current.get("distance") or 0) / 1000
+    duration_min = current.get("duration_minutes") or 0
+    avg_pace = current.get("avg_pace_minutes") or 5.0
+    avg_hr = current.get("avg_hr") or 140
+    title = current.get("title") or "Løbetræning"
+
+    hist_count = len(history)
+    hist_avg_pace = sum(h.get("avg_pace_minutes", 5.0) for h in history) / hist_count if hist_count > 0 else avg_pace
+    hist_avg_hr = sum(h.get("avg_hr", 140) for h in history) / hist_count if hist_count > 0 else avg_hr
+    hist_avg_dist = sum((h.get("distance", 0) / 1000) for h in history) / hist_count if hist_count > 0 else dist_km
+
+    maf_ok = avg_hr <= 155
+    pace_ok = avg_pace <= 5.0
+
+    overview = f"Du gennemførte '{title}' på {dist_km:.2f} km over {int(duration_min)} minutter med en gennemsnitspuls på {avg_hr} bpm og et tempo på {format_pace_str(avg_pace)}."
+    
+    if dist_km > hist_avg_dist * 1.1:
+        dist_comment = f"Dette var en af dine længere ture på gennemsnitligt {hist_avg_dist:.1f} km, hvilket viser flot fremgang i din udholdenhed."
+    elif dist_km < hist_avg_dist * 0.9:
+        dist_comment = f"Dette var en kortere restitutionstur sammenlignet med dit normale snit på {hist_avg_dist:.1f} km."
+    else:
+        dist_comment = f"Distancen ligger fuldstændig stabilt i forhold til dit sædvanlige ugentlige mønster."
+
+    if maf_ok:
+        maf_comment = f"Med en puls på {avg_hr} bpm holdt du dig flot under dit MAF-pulsloft på 155 bpm. Dette opbygger din aerobe base og fedtforbrænding optimalt uden unødig slitage."
+    else:
+        maf_comment = f"Pulsen landede på {avg_hr} bpm, hvilket overstiger dit MAF-pulsloft på 155 bpm. Turen har trukket mere på de anaerobe energireserver end planlagt."
+
+    if pace_ok:
+        pace_comment = f"Tempoet på {format_pace_str(avg_pace)} er under dit primære mål på 5:00 min/km. Utrolig skarp fartkontrol!"
+    else:
+        pace_comment = f"Gennemsnitstempoet var {format_pace_str(avg_pace)}. Da målet er under 5:00 min/km, viser dette pas enten en bevidst rolig tur eller et område, hvor der kan arbejdes med fartforøgelse."
+
+    conclusion = f"Baseret på dine {hist_count} seneste aktiviteter viser din historik en stærk og stabil tråd. Sørg for at prioritere søvn og restitution, så stængerne er friske til næste pas!"
+
+    return {
+        "overview": overview,
+        "dist_comment": dist_comment,
+        "maf_status": "OPTIMAL AEROB ZONE" if maf_ok else "OVER PULSLOFT",
+        "maf_comment": maf_comment,
+        "pace_status": "MÅL NÅET" if pace_ok else "ROLIGT / GRUNDFORM",
+        "pace_comment": pace_comment,
+        "conclusion": conclusion
+    }
+
+def format_pace_str(m):
+    if not m: return "--"
+    mins = int(m)
+    secs = round((m - mins) * 60)
+    return f"{mins}:{secs:02d} /km"
 
 @app.get("/api/activity/{date_str}")
 async def get_activity_by_date(date_str: str):

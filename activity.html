@@ -103,11 +103,11 @@
             <!-- ATHLETE INTELLIGENCE KNAP -->
             <div class="ai-btn-container">
                 <button class="ai-btn" onclick="runAIAnalysis()">
-                    <span>✨</span> Strava Athlete Intelligence — Historisk Analyse
+                    <span>✨</span> Strava Athlete Intelligence — AI Analyse
                 </button>
                 <div class="ai-analysis-box" id="aiAnalysisBox">
-                    <h4><span>⚡</span> AI Træneranalyse & Historik</h4>
-                    <div id="aiContent">Indhenter og analyserer dine tidligere løb og historik...</div>
+                    <h4><span>⚡</span> AI Træneranalyse (Top til toe)</h4>
+                    <div id="aiContent">Henter ægte AI-analyse baseret på al din historik...</div>
                 </div>
             </div>
 
@@ -146,9 +146,7 @@
         Chart.defaults.color = '#94a3b8';
         Chart.defaults.borderColor = '#2a3447';
 
-        let currentActivity = null;
-        let allHistory = [];
-        let generatedSplits = [];
+        let currentActivityDateStr = '';
 
         function formatPace(m) {
             if (!m) return '--';
@@ -159,34 +157,29 @@
         async function loadActivityDetail() {
             const urlParams = new URLSearchParams(window.location.search);
             const dateStr = urlParams.get('date');
+            currentActivityDateStr = dateStr;
             if (!dateStr) {
                 document.getElementById('actTitle').textContent = 'Ingen dato valgt';
                 return;
             }
 
             try {
-                // Hent både specifik aktivitet og historik parallelt
-                const [resAct, resHistory] = await Promise.all([
-                    fetch(`/api/activity/${dateStr}`),
-                    fetch(`/api/activities/history`)
-                ]);
+                const res = await fetch(`/api/activity/${dateStr}`);
+                if (!res.ok) throw new Error('Kunne ikke finde aktivitet');
+                const data = await res.json();
 
-                if (!resAct.ok) throw new Error('Kunne ikke finde aktivitet');
-                currentActivity = await resAct.json();
-                allHistory = await resHistory.json();
-
-                document.getElementById('actTitle').textContent = currentActivity.title || 'Løbeaktivitet';
-                const d = new Date(currentActivity.date);
+                document.getElementById('actTitle').textContent = data.title || 'Løbeaktivitet';
+                const d = new Date(data.date);
                 document.getElementById('actMeta').textContent = `${d.toLocaleString('da-DK')} • Kim Brian Enhaynes Lungay • Vallensbæk`;
 
-                const distNum = currentActivity.distance ? (currentActivity.distance / 1000) : 0;
+                const distNum = data.distance ? (data.distance / 1000) : 0;
                 document.getElementById('actDist').textContent = distNum.toFixed(2) + ' km';
-                document.getElementById('actTime').textContent = currentActivity.duration_minutes ? Math.floor(currentActivity.duration_minutes) + ' min' : '--';
-                document.getElementById('actPace').textContent = formatPace(currentActivity.avg_pace_minutes);
-                document.getElementById('actHr').textContent = (currentActivity.avg_hr || '--') + ' bpm';
+                document.getElementById('actTime').textContent = data.duration_minutes ? Math.floor(data.duration_minutes) + ' min' : '--';
+                document.getElementById('actPace').textContent = formatPace(data.avg_pace_minutes);
+                document.getElementById('actHr').textContent = (data.avg_hr || '--') + ' bpm';
 
                 // Splits
-                generatedSplits = currentActivity.splits && currentActivity.splits.length > 0 ? currentActivity.splits : generateDynamicSplits(distNum, currentActivity.avg_pace_minutes, currentActivity.avg_hr);
+                let generatedSplits = data.splits && data.splits.length > 0 ? data.splits : generateDynamicSplits(distNum, data.avg_pace_minutes, data.avg_hr);
                 
                 const tbody = document.getElementById('splitsTableBody');
                 tbody.innerHTML = '';
@@ -245,7 +238,7 @@
             for (let i = 1; i <= fullKm; i++) {
                 let paceVariation = avgPace + ((Math.sin(i * 1.5) * 0.25));
                 let hrVariation = Math.round(avgHr + (Math.cos(i) * 4));
-                splits.push({ km: i, pace: formatPace(paceVariation).replace(' /km',''), hr: hrVariation });
+                splits.push({ km: i, pace: formatPpace(paceVariation).replace(' /km',''), hr: hrVariation });
             }
             if (remainder > 0.05) {
                 splits.push({ km: remainder.toFixed(2), pace: formatPace(avgPace).replace(' /km',''), hr: Math.round(avgHr) });
@@ -253,65 +246,30 @@
             return splits;
         }
 
-        function runAIAnalysis() {
+        async function runAIAnalysis() {
             const box = document.getElementById('aiAnalysisBox');
             const content = document.getElementById('aiContent');
             box.classList.add('active');
+            content.innerHTML = "Analyserende via Strava Athlete Intelligence...";
 
-            if (!currentActivity) {
-                content.innerHTML = "Kunne ikke indhente data til analysen.";
-                return;
+            try {
+                const res = await fetch(`/api/ai/analyze/${currentActivityDateStr}`);
+                if (!res.ok) throw new Error('Kunne ikke hente AI-analyse');
+                const ai = await res.json();
+
+                let mafBadgeClass = ai.maf_status.includes('OPTIMAL') ? 'success' : 'warning';
+                let paceBadgeClass = ai.pace_status.includes('MÅL') ? 'success' : 'warning';
+
+                content.innerHTML = `
+                    <p><strong>Aktivitetsoverblik:</strong> ${ai.overview}</p>
+                    <p>📈 <strong>Udholdenhed & Historik:</strong> ${ai.dist_comment}</p>
+                    <p><strong>1. MAF-Puls Vurdering (&lt; 155 bpm):</strong> <span class="ai-badge ${mafBadgeClass}">${ai.maf_status}</span><br>${ai.maf_comment}</p>
+                    <p><strong>2. Pace & Målsætning (&lt; 5:00 min/km):</strong> <span class="ai-badge ${paceBadgeClass}">${ai.pace_status}</span><br>${ai.pace_comment}</p>
+                    <p><strong>AI Konklusion (Top til toe):</strong> ${ai.conclusion}</p>
+                `;
+            } catch (e) {
+                content.innerHTML = "Fejl ved generering af AI-analyse. Prøv igen senere.";
             }
-
-            const curDist = currentActivity.distance ? currentActivity.distance / 1000 : 0;
-            const curPace = currentActivity.avg_pace_minutes || 5.0;
-            const curHr = currentActivity.avg_hr || 140;
-
-            // Beregn gennemsnit fra historik
-            let totalDist = 0, totalPace = 0, totalHr = 0, count = allHistory.length;
-            allHistory.forEach(a => {
-                totalDist += (a.distance || 0) / 1000;
-                totalPace += (a.avg_pace_minutes || 5.0);
-                totalHr += (a.avg_hr || 140);
-            });
-
-            const avgDistHist = count > 0 ? totalDist / count : curDist;
-            const avgPaceHist = count > 0 ? totalPace / count : curPace;
-            const avgHrHist = count > 0 ? totalHr / count : curHr;
-
-            // Sammenligninger
-            let paceDiff = curPace - avgPaceHist; // Negativ betød hurtigere
-            let hrDiff = curHr - avgHrHist;
-
-            let paceComparisonText = "";
-            if (paceDiff < -0.1) {
-                paceComparisonText = `Dette løb var <strong>hurtigere</strong> end dit historiske gennemsnit (${formatPace(avgPaceHist)}). Du skruede tempoet i vejret!`;
-            } else if (paceDiff > 0.1) {
-                paceComparisonText = `Dette var en mere afmålt og rolig tur sammenlignet med dit historiske gennemsnit på ${formatPace(avgPaceHist)}. Perfekt til genopbygning.`;
-            } else {
-                paceComparisonText = `Dit tempo lagde sig præcis på linje med din sædvanlige historik (${formatPace(avgPaceHist)}). Meget stabil udvikling!`;
-            }
-
-            let hrComparisonText = "";
-            if (hrDiff < -2) {
-                hrComparisonText = `Din gennemsnitspuls var <strong>${Math.abs(Math.round(hrDiff))} bpm lavere</strong> end normalt, hvilket viser fremragende aerob effektivitet og god form.`;
-            } else if (hrDiff > 2) {
-                hrComparisonText = `Din gennemsnitspuls lå ${Math.round(hrDiff)} bpm højere end dit historiske snit, hvilket indikerer at kroppen har arbejdet lidt hårdere i dag.`;
-            } else {
-                hrComparisonText = `Din puls lå fuldstændig stabilt i forhold til dit normale træningsniveau.`;
-            }
-
-            // MAF & Pace Mål Vurdering
-            let mafValid = curHr <= 155;
-            let mafBadge = mafValid ? '<span class="ai-badge success">MÅL NÅET</span>' : '<span class="ai-badge warning">OVER LOFT</span>';
-
-            content.innerHTML = `
-                <p><strong>Historisk Sammenligning (baseret på dine ${count} seneste aktiviteter):</strong></p>
-                <p>📊 <strong>Tempo-analyse:</strong> ${paceComparisonText}</p>
-                <p>❤️ <strong>Puls-analyse:</strong> ${hrComparisonText}</p>
-                <p>🎯 <strong>MAF-Puls Vurdering (&lt; 155 bpm):</strong> ${mafBadge} Gennemsnit på ${curHr} bpm (${mafValid ? 'Godt inden for zonen' : 'Højere end målet'}).</p>
-                <p><strong>AI Konklusion (Top til toe):</strong> Historikken viser, at du holder en fast tråd i din træning. Sørg for at restituere ordentligt, så du er klar til næste udfordring!</p>
-            `;
         }
 
         loadActivityDetail();
