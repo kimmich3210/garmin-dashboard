@@ -190,7 +190,6 @@ class GarminSync:
                 ORDER BY date DESC LIMIT 1
             """).fetchone()
 
-            # Sørg for at sortere knivskarpt efter dato faldende (nyeste først)
             strength_row = cursor.execute("""
                 SELECT date, 'Styrketræning' as title, 0 as distance, 0 as duration_minutes, 'strength' as type
                 FROM strength_workouts
@@ -216,24 +215,24 @@ class GarminSync:
             try:
                 act_date_str = latest_act["date"].split("T")[0]
                 act_date = datetime.strptime(act_date_str, "%Y-%m-%d")
-                today_date = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+                today_date = datetime.strptime(today_str, "%Y-%m-%d")
                 
-                # Beregn dage siden og sørg for den aldrig bliver negativ
-                days_ago = max(0, (today_date - act_date.replace(hour=0, minute=0, second=0, microsecond=0)).days)
+                # Præcis beregning af dage imellem dags dato og aktivitetsdato
+                days_ago = (today_date - act_date).days
                 
                 if latest_act["type"] == "strength":
-                    if days_ago == 0:
-                        recent_penalty = 12  # Hårdere straf for træning lavet i dag
+                    if days_ago <= 0:
+                        recent_penalty = 12
                         last_activity_text = "Sidste træning: Styrketræning i dag"
                     elif days_ago == 1:
-                        recent_penalty = 8   # Straffen dagen efter
+                        recent_penalty = 7
                         last_activity_text = "Sidste træning: Styrketræning i går"
                     else:
                         recent_penalty = max(0, int(8 / days_ago))
                         last_activity_text = f"Sidste træning: Styrketræning for {days_ago} dage siden"
                 else:
                     dist_km = (latest_act["distance"] or 0) / 1000
-                    if days_ago == 0:
+                    if days_ago <= 0:
                         recent_penalty = int(dist_km * 1.5)
                         last_activity_text = f"Sidste løb: I dag ({dist_km:.1f} km)"
                     elif days_ago == 1:
