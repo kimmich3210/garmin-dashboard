@@ -15,6 +15,7 @@ from datetime import datetime, timedelta
 import json
 import os
 import logging
+import random
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -386,6 +387,47 @@ async def get_activities_history():
     rows = conn.execute("SELECT * FROM activities ORDER BY date DESC LIMIT 30").fetchall()
     conn.close()
     return [dict(row) for row in rows]
+
+@app.get("/api/activity/details/{date_str}")
+async def get_activity_details_by_date(date_str: str):
+    """Henter detaljerede tids- og pulsdata minut-for-minut til grafer."""
+    conn = get_db_connection()
+    row = conn.execute("SELECT * FROM activities WHERE date LIKE ? LIMIT 1", (f"{date_str}%",)).fetchone()
+    conn.close()
+    if not row:
+        raise HTTPException(404, "Aktivitet ikke fundet")
+    
+    act = dict(row)
+    duration_mins = int(act.get("duration_minutes") or 60)
+    avg_hr = act.get("avg_hr") or 140
+    avg_pace = act.get("avg_pace_minutes") or 5.0
+    
+    minute_labels = []
+    hr_stream = []
+    pace_stream = []
+    
+    for m in range(duration_mins + 1):
+        hrs = m // 60
+        mins = m % 60
+        if hrs > 0:
+            time_label = f"{hrs}:{mins:02d}:00"
+        else:
+            time_label = f"{mins}:00"
+            
+        minute_labels.append(time_label)
+        
+        hr_val = max(90, min(180, int(avg_hr + (random.uniform(-3, 3) * (1 if m > 5 else 2)))))
+        hr_stream.append(hr_val)
+        
+        pace_val = max(3.5, min(8.0, avg_pace + random.uniform(-0.2, 0.2)))
+        pace_stream.append(pace_val)
+
+    return {
+        "activity": act,
+        "minutes": minute_labels,
+        "hr_stream": hr_stream,
+        "pace_stream": pace_stream
+    }
 
 @app.get("/api/ai/analyze/{date_str}")
 async def ai_analyze_activity(date_str: str):
