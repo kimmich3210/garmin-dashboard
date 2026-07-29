@@ -27,67 +27,6 @@
             padding: 20px;
         }
 
-        /* Garmin Top Header Bar */
-        .garmin-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            background-color: var(--garmin-card);
-            padding: 15px 25px;
-            border-radius: 6px;
-            border-bottom: 3px solid var(--garmin-blue);
-            margin-bottom: 25px;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.2);
-        }
-        .brand {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-        }
-        .brand-logo {
-            font-weight: 800;
-            font-size: 1.5rem;
-            letter-spacing: 1px;
-            color: #fff;
-            background: var(--garmin-blue);
-            padding: 4px 10px;
-            border-radius: 4px;
-        }
-        .brand-title h1 { font-size: 1.2rem; color: #fff; font-weight: 600; }
-        .brand-title p { font-size: 0.8rem; color: var(--garmin-text-muted); }
-
-        /* Controls / Sync Bar */
-        .controls {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            background-color: var(--garmin-card);
-            padding: 12px 20px;
-            border-radius: 6px;
-            margin-bottom: 25px;
-            border: 1px solid var(--garmin-border);
-        }
-        .sync-status { display: flex; align-items: center; gap: 10px; }
-        .sync-indicator { width: 9px; height: 9px; border-radius: 50%; }
-        .sync-indicator.active { background: var(--garmin-green); box-shadow: 0 0 8px var(--garmin-green); }
-        .sync-indicator.inactive { background: var(--garmin-red); }
-        .sync-info { font-size: 0.85rem; color: var(--garmin-text-muted); }
-
-        .sync-btn {
-            background-color: var(--garmin-blue);
-            color: #fff;
-            border: none;
-            padding: 8px 16px;
-            border-radius: 4px;
-            cursor: pointer;
-            font-weight: 600;
-            font-size: 0.85rem;
-            transition: background 0.2s;
-        }
-        .sync-btn:hover { background-color: #005fa3; }
-        .sync-btn:disabled { background-color: #334155; cursor: not-allowed; }
-
-        /* Main Grid Layout */
         .dashboard-grid {
             display: grid;
             grid-template-columns: 1fr;
@@ -96,32 +35,82 @@
             margin: 0 auto;
         }
 
-        .card {
-            background-color: var(--garmin-card);
-            border-radius: 6px;
-            padding: 20px;
-            border: 1px solid var(--garmin-border);
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-        }
-        .card-header {
+        /* Garmin Header Bar */
+        .garmin-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 15px;
-            border-bottom: 1px solid var(--garmin-border);
-            padding-bottom: 10px;
+            background-color: var(--garmin-card);
+            padding: 15px 25px;
+            border-radius: 6px;
+            border-bottom: 3px solid var(--garmin-blue);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.2);
         }
-        .card-header h3 {
-            font-size: 1rem;
-            color: #fff;
-            font-weight: 600;
-            letter-spacing: 0.5px;
+        .brand { display: flex; align-items: center; gap: 12px; }
+        .brand-logo {
+            font-weight: 800; font-size: 1.5rem; letter-spacing: 1px; color: #fff;
+            background: var(--garmin-blue); padding: 4px 10px; border-radius: 4px;
         }
-        .chart-wrapper {
-            position: relative;
-            height: 320px;
-            width: 100%;
+        .brand-title h1 { font-size: 1.2rem; color: #fff; font-weight: 600; }
+        .brand-title p { font-size: 0.8rem; color: var(--garmin-text-muted); }
+
+        /* Training Readiness Widget (Garmin Style) */
+        .readiness-card {
+            background-color: var(--garmin-card);
+            border-radius: 6px;
+            padding: 20px 25px;
+            border: 1px solid var(--garmin-border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
         }
+        .readiness-left h3 { font-size: 0.9rem; color: var(--garmin-text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 5px; }
+        .readiness-score-container { display: flex; align-items: baseline; gap: 10px; }
+        .readiness-score { font-size: 2.8rem; font-weight: 700; color: #fff; }
+        .readiness-status { font-size: 1.2rem; font-weight: 600; color: var(--garmin-cyan); }
+        .readiness-desc { font-size: 0.85rem; color: var(--garmin-text-muted); margin-top: 4px; }
+        
+        .readiness-circle-badge {
+            width: 75px; height: 75px; border-radius: 50%;
+            background: radial-gradient(circle, #12161f 60%, var(--garmin-cyan) 100%);
+            display: flex; align-items: center; justify-content: center;
+            border: 3px solid var(--garmin-cyan);
+            font-weight: bold; font-size: 1.2rem; color: #fff;
+            box-shadow: 0 0 12px rgba(0, 193, 214, 0.3);
+        }
+
+        /* Controls / Sync Bar */
+        .controls {
+            display: flex; justify-content: space-between; align-items: center;
+            background-color: var(--garmin-card); padding: 12px 20px;
+            border-radius: 6px; border: 1px solid var(--garmin-border);
+        }
+        .sync-status { display: flex; align-items: center; gap: 10px; }
+        .sync-indicator { width: 9px; height: 9px; border-radius: 50%; }
+        .sync-indicator.active { background: var(--garmin-green); box-shadow: 0 0 8px var(--garmin-green); }
+        .sync-indicator.inactive { background: var(--garmin-red); }
+        .sync-info { font-size: 0.85rem; color: var(--garmin-text-muted); }
+
+        .sync-btn {
+            background-color: var(--garmin-blue); color: #fff; border: none;
+            padding: 8px 16px; border-radius: 4px; cursor: pointer; font-weight: 600;
+            font-size: 0.85rem; transition: background 0.2s;
+        }
+        .sync-btn:hover { background-color: #005fa3; }
+        .sync-btn:disabled { background-color: #334155; cursor: not-allowed; }
+
+        /* Chart Cards */
+        .card {
+            background-color: var(--garmin-card); border-radius: 6px; padding: 20px;
+            border: 1px solid var(--garmin-border); box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+        .card-header {
+            display: flex; justify-content: space-between; align-items: center;
+            margin-bottom: 15px; border-bottom: 1px solid var(--garmin-border); padding-bottom: 10px;
+        }
+        .card-header h3 { font-size: 1rem; color: #fff; font-weight: 600; letter-spacing: 0.5px; }
+        .chart-wrapper { position: relative; height: 320px; width: 100%; }
     </style>
 </head>
 <body>
@@ -138,6 +127,19 @@
             </div>
         </header>
 
+        <!-- TRAINING READINESS WIDGET (ØVERST) -->
+        <div class="readiness-card">
+            <div class="readiness-left">
+                <h3>Træningsparathed (Training Readiness)</h3>
+                <div class="readiness-score-container">
+                    <div class="readiness-score" id="readinessScore">--%</div>
+                    <div class="readiness-status" id="readinessStatus">Udreregner...</div>
+                </div>
+                <div class="readiness-desc" id="readinessDesc">Henter hvilepuls og træningsbelastning</div>
+            </div>
+            <div class="readiness-circle-badge" id="readinessBadge">--%</div>
+        </div>
+
         <!-- Sync Control Panel -->
         <div class="controls">
             <div class="sync-status">
@@ -152,27 +154,18 @@
 
         <!-- Pace Chart Card -->
         <div class="card">
-            <div class="card-header">
-                <h3>LØBE-PACE (SIDSTE 30 DAGE)</h3>
-            </div>
-            <div class="chart-wrapper">
-                <canvas id="pace30Chart"></canvas>
-            </div>
+            <div class="card-header"><h3>LØBE-PACE (SIDSTE 30 DAGE)</h3></div>
+            <div class="chart-wrapper"><canvas id="pace30Chart"></canvas></div>
         </div>
 
         <!-- Resting Heart Rate Chart Card -->
         <div class="card">
-            <div class="card-header">
-                <h3>HVILEPULS (SIDSTE 14 DAGE)</h3>
-            </div>
-            <div class="chart-wrapper">
-                <canvas id="rhrChart"></canvas>
-            </div>
+            <div class="card-header"><h3>HVILEPULS (SIDSTE 14 DAGE)</h3></div>
+            <div class="chart-wrapper"><canvas id="rhrChart"></canvas></div>
         </div>
     </div>
 
     <script>
-        // Chart.js styling tilpasset Garmin Connect mørke tema
         Chart.defaults.color = '#94a3b8';
         Chart.defaults.borderColor = '#2a3447';
         Chart.defaults.font.family = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
@@ -183,6 +176,19 @@
             if (!m) return '--';
             const mins = Math.floor(m), secs = Math.round((m - mins) * 60);
             return `${mins}:${secs.toString().padStart(2, '0')}`;
+        }
+
+        async function loadReadiness() {
+            try {
+                const res = await fetch('/api/training/readiness');
+                const data = await res.json();
+                document.getElementById('readinessScore').textContent = `${data.score}%`;
+                document.getElementById('readinessBadge').textContent = `${data.score}%`;
+                document.getElementById('readinessStatus').textContent = `• ${data.status}`;
+                document.getElementById('readinessDesc').textContent = data.description;
+            } catch (e) {
+                console.error('Fejl ved indlæsning af training readiness', e);
+            }
         }
 
         async function loadSyncStatus() {
@@ -245,7 +251,7 @@
                         datasets: [{
                             label: 'Pace (min/km)',
                             data: data.map(d => d.avg_pace_min_km),
-                            borderColor: '#00c1d6', // Garmin Cyan farve
+                            borderColor: '#00c1d6',
                             backgroundColor: 'rgba(0, 193, 214, 0.08)',
                             fill: true,
                             tension: 0.2,
@@ -264,9 +270,7 @@
                                 title: { display: true, text: 'Min/km', color: '#94a3b8' },
                                 ticks: { callback: v => formatPace(v) }
                             },
-                            x: {
-                                grid: { display: false }
-                            }
+                            x: { grid: { display: false } }
                         },
                         plugins: {
                             legend: { display: false },
@@ -302,7 +306,7 @@
                         datasets: [{
                             label: 'Hvilepuls (bpm)',
                             data: data.map(d => d.resting_hr),
-                            borderColor: '#ef4444', // Puls rød
+                            borderColor: '#ef4444',
                             backgroundColor: 'rgba(239, 68, 68, 0.08)',
                             fill: true,
                             tension: 0.2,
@@ -320,9 +324,7 @@
                                 title: { display: true, text: 'BPM', color: '#94a3b8' },
                                 beginAtZero: false
                             },
-                            x: {
-                                grid: { display: false }
-                            }
+                            x: { grid: { display: false } }
                         },
                         plugins: {
                             legend: { display: false },
@@ -346,6 +348,7 @@
 
         async function loadAllData() {
             await Promise.all([
+                loadReadiness(),
                 loadSyncStatus(),
                 loadPace30Chart(),
                 loadRHRChart()

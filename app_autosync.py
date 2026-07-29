@@ -161,14 +161,12 @@ class GarminSync:
             "date": safe_get("startTimeLocal"),
             "title": safe_get("activityName", ""),
             "distance": safe_get("distance"),
-            "distance_km": meters_to_km(safe_get("distance")),
             "calories": safe_get("calories"),
             "duration_minutes": seconds_to_minutes(safe_get("duration")),
             "avg_hr": safe_get("averageHR"),
             "max_hr": safe_get("maxHR"),
             "avg_pace_minutes": mps_to_metric_pace(safe_get("averageSpeed")),
-            "avg_pace_min_km": mps_to_metric_pace(safe_get("averageSpeed")),
-            "best_pace_min_km": mps_to_metric_pace(safe_get("maxSpeed")),
+            "best_pace_minutes": mps_to_metric_pace(safe_get("maxSpeed")),
         }
 
 
@@ -193,7 +191,7 @@ def save_activities_to_db(activities: list[dict]) -> int:
             """, (
                 a["activity_type"], a["date"], a["title"], a["distance"],
                 a["calories"], a["duration_minutes"], a["avg_hr"], a["max_hr"],
-                a["avg_pace_min_km"], a["best_pace_min_km"],
+                a["avg_pace_minutes"], a["best_pace_minutes"],
             ))
             inserted += 1
         except Exception as e:
@@ -218,38 +216,59 @@ def save_resting_heart_rate_to_db(rhr_list: list[dict]):
     conn.close()
 
 
-def generate_automated_feedback():
-    """Generates short, simple coaching feedback based on the last 30 days of running."""
+def calculate_training_readiness():
+    """Udregner en Garmin-lignende Training Readiness score (0-100%) baseret på hvilepuls og seneste træningsbelastning."""
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     
-    cutoff = (datetime.now() - timedelta(days=30)).isoformat()
-    runs = conn.execute("""
-        SELECT date, title, distance, avg_pace_minutes, avg_hr
-        FROM activities
-        WHERE activity_type IN ('running', 'treadmill_running', 'track_running')
-          AND date >= ?
-          AND distance IS NOT NULL
-        ORDER BY date DESC
-    """, (cutoff,)).fetchall()
+    # Hent hvilepuls for de sidste 7 dage
+    rhr_rows = conn.execute("SELECT resting_hr FROM resting_heart_rate ORDER BY date DESC LIMIT 7").fetchall()
+    
+    # Hent træning de sidste 48 timer for at se nylig belastning
+    two_days_ago = (datetime.now() - timedelta(days=2)).isoformat()
+    recent_runs = conn.execute("""
+        SELECT distance, duration_minutes FROM activities 
+        WHERE date >= ? AND distance IS NOT NULL
+    """, (two_days_ago,)).fetchall()
+    
     conn.close()
+    
+    # Standardværdi hvis ingen data er fundet endnu
+    if not rhr_rows:
+        return {"score": 75, "status": "God", "description": "Moderat restitution"}
 
-    if not runs:
-        return {
-            "summary": "Ingen løb de sidste 30 dage.",
-            "details": []
-        }
+    rhr_values = [r["resting_hr"] for r in rhr_rows]
+    latest_rhr = rhr_values[0]
+    avg_rhr = sum(rhr_values) / len(rhr_values)
+    
+    # Logik: Hvis hvilepuls er lavere eller lig gennemsnit = god restitution. Hvis forhøjet = træt.
+    base_score = 80
+    if latest_rhr < avg_rhr:
+        base_score += 10
+    elif latest_rhr > avg_rhr + 2:
+        base_score -= 15
 
-    total_runs = len(runs)
-    long_runs = len([r for r in runs if (r["distance"] / 1000.0) >= 10.0])
-    avg_hr = sum([r["avg_hr"] for r in runs if r["avg_hr"]]) / max(1, len([r for r in runs if r["avg_hr"]]))
+    # Træk fra hvis der har været hård træning de sidste 48 timer
+    total_recent_km = sum([(r["distance"] or 0) / 1000.0 for r in recent_runs])
+    if total_recent_km > 15:
+        base_score -= 20
+    elif total_recent_km > 8:
+        base_score -= 10
 
-    summary_text = f"🏃 Sidste 30 dage: {total_runs} løb ({long_runs} over 10 km). Snitpuls: {avg_hr:.0f} bpm (MAF loft: 155)."
-    details = ["💡 Mål: Hold pulsen under 155 og ryk pacen tættere på 5:00 min/km."]
+    score = max(15, min(98, int(base_score)))
+
+    # Bestem Garmin-status tekst
+    if score >= 75:
+        status, desc = "Høj", "Du er klar til en udfordrende træning!"
+    elif score >= 50:
+        status, desc = "Moderat", "God balance, lyt til kroppen."
+    else:
+        status, desc = "Lav", "Behov for hvile og restitution i dag."
 
     return {
-        "summary": summary_text,
-        "details": details
+        "score": score,
+        "status": status,
+        "description": desc
     }
 
 
@@ -369,9 +388,10 @@ async def get_running_pace_30days():
     conn.close()
     return [dict(row) for row in rows]
 
-@app.get("/api/running/feedback")
-async def get_running_feedback():
-    return generate_automated_feedback()
+@app.get("/api/training/readiness")
+async def get_training_readiness():
+    """Endpoint der leverer Training Readiness score i procent."""
+    return calculate_training_readiness()
 
 @app.get("/", response_class=HTMLResponse)
 async def dashboard():
