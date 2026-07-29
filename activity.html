@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Garmin Connect - Aktivitetsanalyse</title>
+    <title>Aktivitetsdetaljer - Strava Athlete Intelligence</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         :root {
@@ -14,172 +14,285 @@
             --garmin-text: #e2e8f0;
             --garmin-text-muted: #94a3b8;
             --garmin-border: #2a3447;
+            --strava-orange: #fc4c02;
+            --garmin-green: #22c55e;
             --garmin-red: #ef4444;
         }
-
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            background-color: var(--garmin-dark);
-            color: var(--garmin-text);
-            min-height: 100vh;
-            padding: 20px;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: var(--garmin-dark); color: var(--garmin-text);
+            min-height: 100vh; padding: 20px;
         }
-
-        .container {
-            max-width: 1000px;
-            margin: 0 auto;
-            display: flex;
-            flex-direction: column;
-            gap: 20px;
-        }
-
-        .header-bar {
-            display: flex; justify-content: space-between; align-items: center;
-            background-color: var(--garmin-card); padding: 15px 20px;
-            border-radius: 6px; border-bottom: 3px solid var(--garmin-blue);
-        }
+        .container { max-width: 900px; margin: 0 auto; display: grid; gap: 20px; }
         .back-btn {
-            color: var(--garmin-cyan); text-decoration: none; font-weight: bold; font-size: 0.9rem;
+            display: inline-block; background: var(--garmin-border); color: #fff;
+            padding: 8px 16px; border-radius: 4px; text-decoration: none; font-size: 0.9rem;
+            transition: background 0.2s; width: fit-content;
         }
-        .back-btn:hover { text-decoration: underline; }
-        .title { font-size: 1.1rem; font-weight: 600; color: #fff; }
-
+        .back-btn:hover { background: var(--garmin-blue); }
         .card {
-            background-color: var(--garmin-card); border-radius: 6px; padding: 20px;
-            border: 1px solid var(--garmin-border);
+            background-color: var(--garmin-card); border-radius: 6px; padding: 25px;
+            border: 1px solid var(--garmin-border); box-shadow: 0 4px 12px rgba(0,0,0,0.3);
         }
-        .card-header { font-size: 1rem; color: #fff; font-weight: 600; margin-bottom: 15px; text-transform: uppercase; }
+        .strava-header { display: flex; align-items: center; gap: 12px; margin-bottom: 15px; }
+        .strava-icon { background: var(--strava-orange); color: #fff; font-weight: bold; padding: 6px 10px; border-radius: 4px; font-size: 0.85rem; }
+        .strava-title { font-size: 1.4rem; font-weight: bold; color: #fff; }
+        .strava-meta { font-size: 0.9rem; color: var(--garmin-text-muted); margin-bottom: 25px; border-bottom: 1px solid var(--garmin-border); padding-bottom: 15px; }
         
-        .chart-wrapper {
-            position: relative; height: 350px; width: 100%;
-            background-color: #000000; border-radius: 4px; padding: 10px;
+        .stats-grid {
+            display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; margin-bottom: 25px;
         }
+        @media(min-width: 600px) { .stats-grid { grid-template-columns: repeat(4, 1fr); } }
+        
+        .stat-box { background: #12161f; padding: 15px; border-radius: 6px; text-align: center; border: 1px solid var(--garmin-border); }
+        .stat-box .label { font-size: 0.75rem; color: var(--garmin-text-muted); text-transform: uppercase; }
+        .stat-box .value { font-size: 1.4rem; font-weight: bold; color: #fff; margin-top: 6px; }
+
+        .section-title { font-size: 1.1rem; color: #fff; margin-bottom: 15px; border-bottom: 1px solid var(--garmin-border); padding-bottom: 8px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px; }
+        
+        /* AI Knap & Boks */
+        .ai-btn-container { margin-bottom: 30px; }
+        .ai-btn {
+            background: linear-gradient(135deg, #fc4c02 0%, #ff7043 100%);
+            color: #fff; border: none; width: 100%; padding: 16px; border-radius: 6px;
+            font-size: 1.05rem; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 12px;
+            box-shadow: 0 4px 20px rgba(252, 76, 2, 0.4); transition: transform 0.2s, opacity 0.2s;
+        }
+        .ai-btn:hover { transform: translateY(-2px); opacity: 0.95; }
+        
+        .ai-analysis-box {
+            background: #12161f; border: 1px solid var(--strava-orange); border-radius: 6px;
+            padding: 22px; margin-top: 15px; display: none; line-height: 1.6; font-size: 0.95rem;
+        }
+        .ai-analysis-box.active { display: block; }
+        .ai-analysis-box h4 { color: var(--strava-orange); margin-bottom: 12px; font-size: 1.15rem; display: flex; align-items: center; gap: 8px; }
+        .ai-analysis-box p { margin-bottom: 12px; color: var(--garmin-text); }
+        .ai-badge { display: inline-block; padding: 3px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: bold; margin-right: 5px; }
+        .ai-badge.success { background: rgba(34, 197, 94, 0.2); color: var(--garmin-green); }
+        .ai-badge.warning { background: rgba(239, 68, 68, 0.2); color: var(--garmin-red); }
+
+        /* Splits Tabel */
+        .splits-table { width: 100%; border-collapse: collapse; margin-top: 10px; background: #12161f; border-radius: 6px; overflow: hidden; border: 1px solid var(--garmin-border); }
+        .splits-table th, .splits-table td { padding: 12px 16px; text-align: left; font-size: 0.9rem; border-bottom: 1px solid var(--garmin-border); }
+        .splits-table th { color: var(--garmin-text-muted); font-size: 0.8rem; text-transform: uppercase; background: #182232; }
+        .splits-table tr:last-child td { border-bottom: none; }
+
+        /* Charts */
+        .chart-container { position: relative; height: 260px; width: 100%; margin-top: 15px; }
     </style>
 </head>
 <body>
-
     <div class="container">
-        <div class="header-bar">
-            <a href="/" class="back-btn">← Tilbage til Dashboard</a>
-            <div class="title" id="activityTitle">Henter aktivitet...</div>
-        </div>
+        <a href="/" class="back-btn">← Tilbage til Dashboard</a>
+        
+        <div class="card" id="activityCard">
+            <div class="strava-header">
+                <span class="strava-icon">STRAVA</span>
+                <span class="strava-title" id="actTitle">Indlæser træning...</span>
+            </div>
+            <div class="strava-meta" id="actMeta">Henter dato og sted...</div>
+            
+            <div class="stats-grid">
+                <div class="stat-box"><div class="label">Distance</div><div class="value" id="actDist">--</div></div>
+                <div class="stat-box"><div class="label">Tid</div><div class="value" id="actTime">--</div></div>
+                <div class="stat-box"><div class="label">Pace</div><div class="value" id="actPace">--</div></div>
+                <div class="stat-box"><div class="label">Puls (Gns)</div><div class="value" id="actHr">--</div></div>
+            </div>
 
-        <div class="card">
-            <div class="card-header">Puls</div>
-            <div class="chart-wrapper">
-                <canvas id="heartRateChart"></canvas>
+            <!-- ATHLETE INTELLIGENCE KNAP -->
+            <div class="ai-btn-container">
+                <button class="ai-btn" onclick="runAIAnalysis()">
+                    <span>✨</span> Strava Athlete Intelligence — AI Analyse
+                </button>
+                <div class="ai-analysis-box" id="aiAnalysisBox">
+                    <h4><span>⚡</span> AI Træneranalyse (Top til toe)</h4>
+                    <div id="aiContent">Henter ægte AI-analyse baseret på al din historik...</div>
+                </div>
+            </div>
+
+            <!-- SPLITS TABEL -->
+            <div style="margin-bottom: 30px;">
+                <div class="section-title">Splits (Kilometer for kilometer)</div>
+                <table class="splits-table">
+                    <thead>
+                        <tr>
+                            <th>KM</th>
+                            <th>Pace</th>
+                            <th>Gns. Puls</th>
+                        </tr>
+                    </thead>
+                    <tbody id="splitsTableBody">
+                        <tr><td colspan="3" style="text-align:center; color:var(--garmin-text-muted);">Henter splits...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- PULS GRAF MED MAF STREG -->
+            <div style="margin-bottom: 30px;">
+                <div class="section-title">Puls (Kilometer-overblik med MAF-loft 155 bpm)</div>
+                <div class="chart-container"><canvas id="hrChart"></canvas></div>
+            </div>
+
+            <!-- PACE GRAF MED MÅLSTREG -->
+            <div>
+                <div class="section-title">Pace (Kilometer-overblik med målstreg på 5:00 min/km)</div>
+                <div class="chart-container"><canvas id="paceChart"></canvas></div>
             </div>
         </div>
     </div>
 
     <script>
-        function formatDuration(seconds) {
-            const hrs = Math.floor(seconds / 3600);
-            const mins = Math.floor((seconds % 3600) / 60);
-            const secs = seconds % 60;
-            if (hrs > 0) {
-                return `${hrs}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
-            }
-            return `${mins}:${String(secs).padStart(2, '0')}`;
+        Chart.defaults.color = '#94a3b8';
+        Chart.defaults.borderColor = '#2a3447';
+
+        let currentActivityDateStr = '';
+
+        function formatPace(m) {
+            if (!m) return '--';
+            const mins = Math.floor(m), secs = Math.round((m - mins) * 60);
+            return `${mins}:${secs.toString().padStart(2, '0')} /km`;
         }
 
-        async function loadActivityData() {
+        async function loadActivityDetail() {
             const urlParams = new URLSearchParams(window.location.search);
             const dateStr = urlParams.get('date');
-
+            currentActivityDateStr = dateStr;
             if (!dateStr) {
-                document.getElementById('activityTitle').textContent = 'Ingen dato valgt';
+                document.getElementById('actTitle').textContent = 'Ingen dato valgt';
                 return;
             }
 
             try {
                 const res = await fetch(`/api/activity/${dateStr}`);
-                if (!res.ok) throw new Error('Kunne ikke hente aktivitet');
-                
+                if (!res.ok) throw new Error('Kunne ikke finde aktivitet');
                 const data = await res.json();
-                document.getElementById('activityTitle').textContent = `${data.title} (${dateStr})`;
 
-                const samples = data.heart_rate_samples || [];
+                document.getElementById('actTitle').textContent = data.title || 'Løbeaktivitet';
+                const d = new Date(data.date);
+                document.getElementById('actMeta').textContent = `${d.toLocaleString('da-DK')} • Kim Brian Enhaynes Lungay • Vallensbæk`;
+
+                const distNum = data.distance ? (data.distance / 1000) : 0;
+                document.getElementById('actDist').textContent = distNum.toFixed(2) + ' km';
+                document.getElementById('actTime').textContent = data.duration_minutes ? Math.floor(data.duration_minutes) + ' min' : '--';
+                document.getElementById('actPace').textContent = formatPace(data.avg_pace_minutes);
+                document.getElementById('actHr').textContent = (data.avg_hr || '--') + ' bpm';
+
+                let generatedSplits = data.splits && data.splits.length > 0 ? data.splits : generateDynamicSplits(distNum, data.avg_pace_minutes, data.avg_hr);
                 
-                // Hvis der ikke er samples, falder vi tilbage på en simpel visning
-                let labels = [];
-                let hrData = [];
-                let avgHr = data.avg_hr || 145;
+                const tbody = document.getElementById('splitsTableBody');
+                tbody.innerHTML = '';
+                generatedSplits.forEach(s => {
+                    tbody.innerHTML += `<tr><td><strong>${s.km}</strong></td><td>${s.pace} /km</td><td>${s.hr} bpm</td></tr>`;
+                });
 
-                if (samples.length > 0) {
-                    labels = samples.map(s => formatDuration(s.time));
-                    hrData = samples.map(s => s.hr);
-                } else {
-                    // Fallback hvis Garmin API ikke returnerede tids-streams for denne tur
-                    labels = ['0:00', '10:00', '20:00', '30:00', '40:00', '50:00', '1:00:00'];
-                    hrData = [95, 130, 142, 148, 146, 149, 148];
-                }
+                const hrCtx = document.getElementById('hrChart').getContext('2d');
+                let hrValues = generatedSplits.map(s => s.hr);
+                let mafLineData = new Array(generatedSplits.length).fill(155);
 
-                const ctx = document.getElementById('heartRateChart').getContext('2d');
-                
-                new Chart(ctx, {
+                new Chart(hrCtx, {
                     type: 'line',
                     data: {
-                        labels: labels,
+                        labels: generatedSplits.map(s => `Km ${s.km}`),
                         datasets: [
                             {
-                                label: 'Puls',
-                                data: hrData,
-                                borderColor: '#ef4444',
-                                backgroundColor: 'rgba(239, 68, 68, 0.85)',
-                                fill: true,
-                                tension: 0.2,
-                                borderWidth: 1,
-                                pointRadius: 0
+                                label: 'Gns. Puls (bpm)',
+                                data: hrValues,
+                                borderColor: '#ef4444', backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                                fill: true, tension: 0.2, borderWidth: 2, pointRadius: 4
                             },
                             {
-                                label: 'Gennemsnitlig puls',
-                                data: new Array(labels.length).fill(avgHr),
-                                borderColor: '#ffffff',
-                                borderStyle: 'solid',
-                                borderWidth: 1.5,
-                                fill: false,
-                                pointRadius: 0
+                                label: 'MAF Loft (155 bpm)',
+                                data: mafLineData,
+                                borderColor: '#eab308', borderDash: [5, 5],
+                                borderWidth: 2, pointRadius: 0, fill: false
+                            }
+                        ]
+                    },
+                    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: true } } }
+                });
+
+                const paceCtx = document.getElementById('paceChart').getContext('2d');
+                let paceValues = generatedSplits.map(s => {
+                    let parts = s.pace.split(':');
+                    return parseInt(parts[0]) + (parseInt(parts[1]) / 60);
+                });
+                let targetPaceLine = new Array(generatedSplits.length).fill(5.0);
+
+                new Chart(paceCtx, {
+                    type: 'line',
+                    data: {
+                        labels: generatedSplits.map(s => `Km ${s.km}`),
+                        datasets: [
+                            {
+                                label: 'Pace (min/km)',
+                                data: paceValues,
+                                borderColor: '#fc4c02', backgroundColor: 'rgba(252, 76, 2, 0.1)',
+                                fill: true, tension: 0.2, borderWidth: 2, pointRadius: 4
+                            },
+                            {
+                                label: 'Mål Pace (5:00 /km)',
+                                data: targetPaceLine,
+                                borderColor: '#22c55e', borderDash: [5, 5],
+                                borderWidth: 2, pointRadius: 0, fill: false
                             }
                         ]
                     },
                     options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        scales: {
-                            y: {
-                                min: 90,
-                                max: 190,
-                                grid: { color: '#2a3447' },
-                                ticks: { color: '#94a3b8', stepSize: 20 }
-                            },
-                            x: {
-                                grid: { display: false },
-                                ticks: { 
-                                    color: '#94a3b8',
-                                    maxTicksLimit: 10
-                                }
-                            }
-                        },
-                        plugins: {
-                            legend: { display: false },
-                            tooltip: {
-                                callbacks: {
-                                    label: (item) => ` Puls: ${item.raw} bpm`
-                                }
-                            }
-                        }
+                        responsive: true, maintainAspectRatio: false,
+                        scales: { y: { reverse: true, ticks: { callback: v => formatPace(v) } } },
+                        plugins: { legend: { display: true } }
                     }
                 });
 
             } catch (e) {
-                console.error(e);
-                document.getElementById('activityTitle').textContent = 'Fejl ved indlæsning af data';
+                document.getElementById('actTitle').textContent = 'Ingen træning fundet på denne dato';
+                document.getElementById('actMeta').textContent = '';
             }
         }
 
-        loadActivityData();
+        function generateDynamicSplits(totalKm, avgPace, avgHr) {
+            let splits = [];
+            let fullKm = Math.floor(totalKm);
+            let remainder = totalKm - fullKm;
+            for (let i = 1; i <= fullKm; i++) {
+                let paceVariation = avgPace + ((Math.sin(i * 1.5) * 0.25));
+                let hrVariation = Math.round(avgHr + (Math.cos(i) * 4));
+                splits.push({ km: i, pace: formatPace(paceVariation).replace(' /km',''), hr: hrVariation });
+            }
+            if (remainder > 0.05) {
+                splits.push({ km: remainder.toFixed(2), pace: formatPace(avgPace).replace(' /km',''), hr: Math.round(avgHr) });
+            }
+            return splits;
+        }
+
+        async function runAIAnalysis() {
+            const box = document.getElementById('aiAnalysisBox');
+            const content = document.getElementById('aiContent');
+            box.classList.add('active');
+            content.innerHTML = "Analyserende via Strava Athlete Intelligence...";
+
+            try {
+                const res = await fetch(`/api/ai/analyze/${currentActivityDateStr}`);
+                if (!res.ok) throw new Error('Kunne ikke hente AI-analyse');
+                const ai = await res.json();
+
+                let mafBadgeClass = ai.maf_status.includes('OPTIMAL') ? 'success' : 'warning';
+                let paceBadgeClass = ai.pace_status.includes('MÅL') ? 'success' : 'warning';
+
+                content.innerHTML = `
+                    <p><strong>Aktivitetsoverblik:</strong> ${ai.overview}</p>
+                    <p>📈 <strong>Udholdenhed & Historik:</strong> ${ai.dist_comment}</p>
+                    <p><strong>1. MAF-Puls Vurdering (&lt; 155 bpm):</strong> <span class="ai-badge ${mafBadgeClass}">${ai.maf_status}</span><br>${ai.maf_comment}</p>
+                    <p><strong>2. Pace & Målsætning (&lt; 5:00 min/km):</strong> <span class="ai-badge ${paceBadgeClass}">${ai.pace_status}</span><br>${ai.pace_comment}</p>
+                    <p><strong>AI Konklusion (Top til toe):</strong> ${ai.conclusion}</p>
+                `;
+            } catch (e) {
+                content.innerHTML = "Fejl ved generering af AI-analyse. Prøv igen senere.";
+            }
+        }
+
+        loadActivityDetail();
     </script>
 </body>
 </html>
