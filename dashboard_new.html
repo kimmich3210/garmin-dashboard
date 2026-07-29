@@ -16,7 +16,6 @@
             --garmin-border: #2a3447;
             --garmin-green: #22c55e;
             --garmin-red: #ef4444;
-            --strava-orange: #fc4c02;
         }
 
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -36,7 +35,7 @@
             margin: 0 auto;
         }
 
-        /* Header med levende grøn prik og dato */
+        /* Header */
         .garmin-header {
             display: flex; justify-content: space-between; align-items: center;
             background-color: var(--garmin-card); padding: 15px 25px;
@@ -113,7 +112,7 @@
             padding: 2px 4px; border-radius: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left;
         }
 
-        /* Activity Detail Modal / View */
+        /* Activity Detail */
         .activity-detail-card {
             background-color: var(--garmin-card); border-radius: 6px; padding: 20px;
             border: 1px solid var(--garmin-border); display: none;
@@ -197,12 +196,10 @@
             <div class="calendar-header">
                 <h3 id="calendarMonthTitle">Træningskalender</h3>
             </div>
-            <div class="calendar-grid" id="calendarGrid">
-                <!-- Genereres via JS -->
-            </div>
+            <div class="calendar-grid" id="calendarGrid"></div>
         </div>
 
-        <!-- Aktivitets Detalje boks -->
+        <!-- Aktivitets Detalje -->
         <div class="activity-detail-card" id="activityDetailCard">
             <div class="strava-header">
                 <div class="strava-title-group">
@@ -234,7 +231,7 @@
 
         <!-- Grafer -->
         <div class="card">
-            <div class="card-header"><h3>LØBE-PACE (SIDSTE 30 DAGE)</h3></div>
+            <div class="card-header"><h3>LØBE-PACE (MAF START FRA 13. JULI)</h3></div>
             <div class="chart-wrapper"><canvas id="pace30Chart"></canvas></div>
         </div>
 
@@ -262,9 +259,8 @@
             return `${mins}:${secs.toString().padStart(2, '0')}`;
         }
 
-        // Hjælpefunktion til at give MAF 1, MAF 2 osv. baseret på kronologi fra 13. juli 2026
+        // MAF nummerering fra 13. juli 2026
         function processMafTitles(activities) {
-            // Sorter ældst først
             const sorted = [...activities].sort((a, b) => new Date(a.date) - new Date(b.date));
             let mafCount = 1;
             const mafStartDate = new Date('2026-07-13T00:00:00');
@@ -306,7 +302,7 @@
                 document.getElementById('calendarMonthTitle').textContent = `Træningskalender — ${monthNames[month]} ${year}`;
 
                 const firstDay = new Date(year, month, 1).getDay();
-                const adjustedFirstDay = firstDay === 0 ? 6 : firstDay - 1; // Mandag start
+                const adjustedFirstDay = firstDay === 0 ? 6 : firstDay - 1;
                 const daysInMonth = new Date(year, month + 1, 0).getDate();
 
                 const grid = document.getElementById('calendarGrid');
@@ -422,30 +418,59 @@
         async function loadPace30Chart() {
             try {
                 const res = await fetch('/api/running/pace-30days');
-                let data = await res.json();
-                // Sørg for at graferne også bruger MAF-navnene
-                data = processMafTitles(data);
+                let rawData = await res.json();
+                let processed = processMafTitles(rawData);
                 
+                // Filtrer KUN løb fra og med den 13. juli 2026 og frem
+                const mafStartDate = new Date('2026-07-13T00:00:00');
+                const filteredData = processed.filter(d => new Date(d.date) >= mafStartDate);
+
                 const ctx = document.getElementById('pace30Chart').getContext('2d');
                 if (pace30Chart) pace30Chart.destroy();
+                
                 pace30Chart = new Chart(ctx, {
                     type: 'line',
                     data: {
-                        labels: data.map(d => `${d.date.split('T')[0]} (${d.displayTitle})`),
+                        // Viser KUN MAF-navnet på X-akसेन (ingen datoer)
+                        labels: filteredData.map(d => d.displayTitle),
                         datasets: [{
                             label: 'Pace (min/km)',
-                            data: data.map(d => d.avg_pace_min_km),
-                            borderColor: '#ef4444', backgroundColor: 'rgba(239, 68, 68, 0.08)',
-                            fill: true, tension: 0.2, borderWidth: 2, pointRadius: 3, pointBackgroundColor: '#ef4444'
+                            data: filteredData.map(d => d.avg_pace_min_km),
+                            borderColor: '#ef4444', 
+                            backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                            fill: true, 
+                            tension: 0.3,
+                            borderWidth: 3, 
+                            pointRadius: 6, 
+                            pointBackgroundColor: '#ef4444',
+                            pointBorderColor: '#fff',
+                            pointBorderWidth: 2
                         }]
                     },
                     options: {
-                        responsive: true, maintainAspectRatio: false,
+                        responsive: true, 
+                        maintainAspectRatio: false,
                         scales: {
-                            y: { reverse: true, grid: { color: '#2a3447' }, title: { display: true, text: 'Min/km', color: '#94a3b8' }, ticks: { callback: v => formatPace(v) } },
-                            x: { grid: { display: false } }
+                            y: { 
+                                reverse: true, // Lavere min/km (hurtigere) er øverst
+                                grid: { color: '#2a3447' }, 
+                                title: { display: true, text: 'Tempo (Min/km)', color: '#94a3b8' }, 
+                                ticks: { callback: v => formatPace(v) } 
+                            },
+                            x: { 
+                                grid: { display: false },
+                                ticks: { color: '#e2e8f0', font: { weight: 'bold' } }
+                            }
                         },
-                        plugins: { legend: { display: false } }
+                        plugins: { 
+                            legend: { display: false },
+                            tooltip: {
+                                callbacks: {
+                                    title: (items) => items[0].label,
+                                    label: (item) => ` Pace: ${formatPace(item.raw)} min/km`
+                                }
+                            }
+                        }
                     }
                 });
             } catch (e) { console.error(e); }

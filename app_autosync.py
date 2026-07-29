@@ -82,7 +82,7 @@ class GarminSync:
 
             for a in batch:
                 norm = self._normalize_activity(a)
-                if norm["activity_type"] in ["running", "treadmill_running", "track_running"]:
+                if norm["distance"] > 0: # Inkluder alt med distance
                     try:
                         act_date = datetime.strptime(norm["date"].split("T")[0], "%Y-%m-%d")
                         if act_date >= maf_start_date:
@@ -145,9 +145,9 @@ class GarminSync:
         except:
             pass
 
-        # 1. Tjek seneste løb og træningsbelastning i databasen
+        # 1. Hent absolut seneste aktivitet fra databasen uanset type
         recent_run_penalty = 0
-        last_run_text = "Ingen nyere løb"
+        last_run_text = "Ingen løb fundet"
         try:
             conn = sqlite3.connect(DB_PATH)
             conn.row_factory = sqlite3.Row
@@ -155,27 +155,32 @@ class GarminSync:
             row = cursor.execute("""
                 SELECT date, title, distance, duration_minutes 
                 FROM activities 
-                WHERE activity_type IN ('running', 'treadmill_running', 'track_running') 
                 ORDER BY date DESC LIMIT 1
             """).fetchone()
             conn.close()
 
             if row:
-                run_date = datetime.strptime(row["date"].split("T")[0], "%Y-%m-%d")
-                days_ago = (datetime.now() - run_date).days
+                run_date_str = row["date"].split("T")[0]
+                run_date = datetime.strptime(run_date_str, "%Y-%m-%d")
+                
+                # Beregn forskel i dage uafhængigt af tidszone
+                today_date = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+                run_date_clean = run_date.replace(hour=0, minute=0, second=0, microsecond=0)
+                days_ago = (today_date - run_date_clean).days
+                
                 dist_km = (row["distance"] or 0) / 1000
                 
                 if days_ago == 0:
                     recent_run_penalty = int(dist_km * 1.5)
-                    last_run_text = f"Løbet i dag ({dist_km:.1f} km)"
+                    last_run_text = f"Sidste løb: I dag ({dist_km:.1f} km)"
                 elif days_ago == 1:
                     recent_run_penalty = int(dist_km * 0.8)
-                    last_run_text = f"Seneste løb i går ({dist_km:.1f} km)"
-                elif days_ago <= 2:
-                    recent_run_penalty = int(dist_km * 0.3)
-                    last_run_text = f"Seneste løb for {days_ago} dage siden ({dist_km:.1f} km)"
-        except:
-            pass
+                    last_run_text = f"Sidste løb: I går ({dist_km:.1f} km)"
+                else:
+                    recent_run_penalty = max(0, int(dist_km * (0.5 / max(1, days_ago))))
+                    last_run_text = f"Sidste løb: For {days_ago} dage siden ({dist_km:.1f} km)"
+        except Exception as e:
+            logger.error(f"Fejl ved hentning af seneste løb: {e}")
 
         # 2. Basis beregning ud fra Søvnscore og Body Battery
         score_parts = []
@@ -187,7 +192,7 @@ class GarminSync:
         else:
             score = 75
 
-        # 3. Træk fra for træningsbelastning fra seneste løb
+        # 3. Træk fra for træningsbelastning
         score -= recent_run_penalty
 
         # 4. Justeringer for HRV-status
@@ -232,9 +237,15 @@ class GarminSync:
         duration_sec = raw.get("duration")
         duration_mins = (duration_sec / 60) if duration_sec else 0
 
+        act_type = "running"
+        try:
+            act_type = raw.get("activityType", {}).get("typeKey", "running")
+        except:
+            pass
+
         return {
             "activity_id": str(raw.get("activityId", "")),
-            "activity_type": raw.get("activityType", {}).get("typeKey", "running"),
+            "activity_type": act_type,
             "date": raw.get("startTimeLocal"),
             "title": raw.get("activityName", "Løbetur"),
             "distance": raw.get("distance", 0),
@@ -328,7 +339,7 @@ async def sync_status():
 @app.post("/api/sync/now")
 async def sync_now():
     await scheduled_sync()
-    return {"message": "Synkronisering gennemført (Træningsparathed opdateret)", "last_sync": datetime.now().isoformat()}
+    return {"message": "Synkronisering gennemført og seneste løb opdateret", "last_sync": datetime.now().isoformat()}
 
 @app.get("/api/health/resting-hr")
 async def get_resting_hr():
@@ -343,8 +354,7 @@ async def get_running_pace_30days():
     rows = conn.execute("""
         SELECT date, title, distance, avg_pace_minutes as avg_pace_min_km, avg_hr, max_hr
         FROM activities
-        WHERE activity_type IN ('running', 'treadmill_running', 'track_running')
-          AND avg_pace_minutes IS NOT NULL 
+        WHERE avg_pace_minutes IS NOT NULL 
           AND avg_pace_minutes > 0
         ORDER BY date ASC
     """).fetchall()
@@ -358,7 +368,7 @@ async def get_training_readiness():
 @app.get("/api/activities/all")
 async def get_all_activities():
     conn = get_db_connection()
-    rows = conn.execute("SELECT * FROM activities WHERE activity_type IN ('running', 'treadmill_running', 'track_running') ORDER BY date DESC").fetchall()
+    rows = conn.execute("SELECT * FROM activities ORDER BY date DESC").fetchall()
     conn.close()
     return [dict(row) for row in rows]
 
@@ -369,7 +379,38 @@ async def get_activity_by_date(date_str: str):
     conn.close()
     if not row:
         raise HTTPException(404, "Ingen aktivitet fundet")
-    return dict(row)
+    
+    activity_dict = dict(row)
+    act_id = activity_dict.get("activity_id")
+
+    heart_rate_samples = []
+    if garmin_sync.client or garmin_sync.login():
+        try:
+            details = garmin_sync.client.get_activity_details(act_id)
+            metrics = details.get("activityDetailMetrics", [])
+            hr_index = -1
+            time_index = -1
+            
+            descriptors = details.get("metricDescriptors", [])
+            for idx, desc in enumerate(descriptors):
+                key = desc.get("key", "")
+                if key == "directHeartRate" or key == "heartRate":
+                    hr_index = idx
+                elif key == "sumElapsedDuration" or key == "elapsedDuration" or key == "timestamp":
+                    time_index = idx
+
+            for m in metrics:
+                vals = m.get("metrics", [])
+                if hr_index != -1 and time_index != -1 and len(vals) > max(hr_index, time_index):
+                    t = vals[time_index]
+                    hr = vals[hr_index]
+                    if hr is not None and hr > 0:
+                        heart_rate_samples.append({"time": t, "hr": hr})
+        except Exception as e:
+            logger.error(f"Kunne ikke hente pulskurve fra Garmin: {e}")
+
+    activity_dict["heart_rate_samples"] = heart_rate_samples
+    return activity_dict
 
 @app.get("/activity", response_class=HTMLResponse)
 async def activity_page():
