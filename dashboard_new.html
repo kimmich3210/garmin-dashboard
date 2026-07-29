@@ -178,12 +178,20 @@
         }
         @media (min-width: 600px) { .sync-btn { width: auto; } }
 
+        /* Chart Header with Period Selector */
+        .chart-header-row {
+            display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; border-bottom: 1px solid var(--garmin-border); padding-bottom: 8px;
+        }
+        .chart-header-row h3 { font-size: 0.9rem; color: #fff; font-weight: 600; }
+        .period-select {
+            background: #12161f; color: var(--garmin-text); border: 1px solid var(--garmin-border);
+            padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; outline: none; cursor: pointer;
+        }
+
         /* Charts */
         .card {
             background-color: var(--garmin-card); border-radius: 8px; padding: 15px; border: 1px solid var(--garmin-border);
         }
-        .card-header { border-bottom: 1px solid var(--garmin-border); padding-bottom: 8px; margin-bottom: 12px; }
-        .card-header h3 { font-size: 0.9rem; color: #fff; font-weight: 600; }
         .chart-wrapper { position: relative; height: 260px; width: 100%; }
         @media (min-width: 600px) { .chart-wrapper { height: 320px; } }
     </style>
@@ -241,12 +249,17 @@
 
         <!-- Grafer -->
         <div class="card">
-            <div class="card-header"><h3>LØBE-PACE (MAF START FRA 13. JULI)</h3></div>
+            <div class="chart-header-row">
+                <h3>LØBE-PACE (FRA D. 13 PR. MÅNED)</h3>
+                <select id="periodSelect" class="period-select" onchange="updatePaceChartPeriod()">
+                    <!-- Udfyldes dynamisk -->
+                </select>
+            </div>
             <div class="chart-wrapper"><canvas id="pace30Chart"></canvas></div>
         </div>
 
         <div class="card">
-            <div class="card-header"><h3>HVILEPULS (SIDSTE 14 DAGE)</h3></div>
+            <div class="chart-header-row"><h3>HVILEPULS (SIDSTE 14 DAGE)</h3></div>
             <div class="chart-wrapper"><canvas id="rhrChart"></canvas></div>
         </div>
     </div>
@@ -279,6 +292,7 @@
 
         let rhrChart, pace30Chart;
         let cachedActivities = [];
+        let allProcessedRuns = [];
 
         const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
         const todayStr = new Date().toLocaleDateString('da-DK', options);
@@ -386,7 +400,6 @@
             if (!match) return;
 
             document.getElementById('modalTitle').textContent = match.displayTitle;
-            
             const d = new Date(match.date);
             document.getElementById('modalMeta').textContent = `${d.toLocaleString('da-DK')} • Vallensbæk`;
             
@@ -401,15 +414,8 @@
             document.getElementById('activityModal').classList.add('active');
         }
 
-        function closeModal() {
-            document.getElementById('activityModal').classList.remove('active');
-        }
-
-        function handleModalClick(event) {
-            if (event.target.id === 'activityModal') {
-                closeModal();
-            }
-        }
+        function closeModal() { document.getElementById('activityModal').classList.remove('active'); }
+        function handleModalClick(event) { if (event.target.id === 'activityModal') closeModal(); }
 
         async function loadSyncStatus() {
             try {
@@ -452,62 +458,110 @@
             try {
                 const res = await fetch('/api/running/pace-30days');
                 let rawData = await res.json();
-                let processed = processMafTitles(rawData);
+                allProcessedRuns = processMafTitles(rawData);
                 
                 const mafStartDate = new Date('2026-07-13T00:00:00');
-                let filteredData = processed.filter(d => new Date(d.date) >= mafStartDate);
-                if (filteredData.length > 15) {
-                    filteredData = filteredData.slice(filteredData.length - 15);
+                allProcessedRuns = allProcessedRuns.filter(d => new Date(d.date) >= mafStartDate);
+
+                // Generér månedsperioder (fra d. 13 til d. 13 i næste måned)
+                let periods = [];
+                let start = new Date(mafStartDate);
+                let now = new Date();
+
+                while (start <= now) {
+                    let end = new Date(start);
+                    end.setMonth(end.getMonth() + 1);
+                    
+                    periods.push({
+                        start: new Date(start),
+                        end: new Date(end),
+                        label: `${start.toLocaleDateString('da-DK', {day: 'numeric', month: 'short'})} - ${end.toLocaleDateString('da-DK', {day: 'numeric', month: 'short', year: 'numeric'})}`
+                    });
+                    
+                    start.setMonth(start.getMonth() + 1);
                 }
 
-                const ctx = document.getElementById('pace30Chart').getContext('2d');
-                if (pace30Chart) pace30Chart.destroy();
-                
-                pace30Chart = new Chart(ctx, {
-                    type: 'line',
-                    data: {
-                        labels: filteredData.map(d => d.displayTitle),
-                        datasets: [{
-                            label: 'Pace (min/km)',
-                            data: filteredData.map(d => d.avg_pace_min_km),
-                            borderColor: '#ef4444', 
-                            backgroundColor: 'rgba(239, 68, 68, 0.1)',
-                            fill: true, 
-                            tension: 0.3,
-                            borderWidth: 3, 
-                            pointRadius: 6, 
-                            pointBackgroundColor: '#ef4444',
-                            pointBorderColor: '#fff',
-                            pointBorderWidth: 2
-                        }]
-                    },
-                    options: {
-                        responsive: true, 
-                        maintainAspectRatio: false,
-                        scales: {
-                            y: { 
-                                reverse: true, 
-                                grid: { color: '#2a3447' }, 
-                                title: { display: true, text: 'Tempo (Min/km)', color: '#94a3b8' }, 
-                                ticks: { callback: v => formatPace(v) } 
-                            },
-                            x: { 
-                                grid: { display: false },
-                                ticks: { color: '#e2e8f0', font: { weight: 'bold' } }
-                            }
+                const select = document.getElementById('periodSelect');
+                select.innerHTML = '';
+                periods.forEach((p, idx) => {
+                    const opt = document.createElement('option');
+                    opt.value = idx;
+                    opt.textContent = p.label;
+                    select.appendChild(opt);
+                });
+
+                // Vælg den nyeste periode som standard
+                if (periods.length > 0) {
+                    select.value = periods.length - 1;
+                }
+
+                window.pacePeriods = periods;
+                renderPaceChartForSelectedPeriod();
+            } catch (e) { console.error(e); }
+        }
+
+        function updatePaceChartPeriod() {
+            renderPaceChartForSelectedPeriod();
+        }
+
+        function renderPaceChartForSelectedPeriod() {
+            const select = document.getElementById('periodSelect');
+            const idx = select.value;
+            if (!window.pacePeriods || window.pacePeriods[idx] === undefined) return;
+
+            const period = window.pacePeriods[idx];
+            const filteredData = allProcessedRuns.filter(d => {
+                const dDate = new Date(d.date);
+                return dDate >= period.start && dDate < period.end;
+            });
+
+            const ctx = document.getElementById('pace30Chart').getContext('2d');
+            if (pace30Chart) pace30Chart.destroy();
+            
+            pace30Chart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: filteredData.map(d => d.displayTitle),
+                    datasets: [{
+                        label: 'Pace (min/km)',
+                        data: filteredData.map(d => d.avg_pace_min_km),
+                        borderColor: '#ef4444', 
+                        backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                        fill: true, 
+                        tension: 0.3,
+                        borderWidth: 3, 
+                        pointRadius: 6, 
+                        pointBackgroundColor: '#ef4444',
+                        pointBorderColor: '#fff',
+                        pointBorderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true, 
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: { 
+                            reverse: true, 
+                            grid: { color: '#2a3447' }, 
+                            title: { display: true, text: 'Tempo (Min/km)', color: '#94a3b8' }, 
+                            ticks: { callback: v => formatPace(v) } 
                         },
-                        plugins: { 
-                            legend: { display: false },
-                            tooltip: {
-                                callbacks: {
-                                    title: (items) => items[0].label,
-                                    label: (item) => ` Pace: ${formatPace(item.raw)} min/km`
-                                }
+                        x: { 
+                            grid: { display: false },
+                            ticks: { color: '#e2e8f0', font: { weight: 'bold' } }
+                        }
+                    },
+                    plugins: { 
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                title: (items) => items[0].label,
+                                label: (item) => ` Pace: ${formatPace(item.raw)} min/km`
                             }
                         }
                     }
-                });
-            } catch (e) { console.error(e); }
+                }
+            });
         }
 
         async function loadRHRChart() {
