@@ -115,7 +115,6 @@ class GarminSync:
         return rhr_data
 
     def fetch_training_readiness_comprehensive(self) -> dict:
-        """Kombinerer søvn, Body Battery, seneste løb, HRV, hvilepuls og døgnets stressniveau."""
         if not self.client:
             if not self.login():
                 return {"score": 75, "status": "Høj", "description": "Afventer forbindelse til Garmin Connect."}
@@ -145,7 +144,6 @@ class GarminSync:
         except:
             pass
 
-        # 1. Tjek seneste løb og træningsbelastning i databasen
         recent_run_penalty = 0
         last_run_text = "Ingen nyere løb"
         try:
@@ -177,7 +175,6 @@ class GarminSync:
         except:
             pass
 
-        # 2. Basis beregning ud fra Søvnscore og Body Battery
         score_parts = []
         if sleep_score is not None: score_parts.append(sleep_score * 0.5)
         if body_battery is not None: score_parts.append(body_battery * 0.5)
@@ -187,34 +184,23 @@ class GarminSync:
         else:
             score = 75
 
-        # 3. Træk fra for træningsbelastning fra seneste løb
         score -= recent_run_penalty
 
-        # 4. Justeringer for HRV-status
-        if hrv_status == 'UNBALANCED': 
-            score -= 12
-        elif hrv_status == 'BALANCED':
-            score += 5
+        if hrv_status == 'UNBALANCED': score -= 12
+        elif hrv_status == 'BALANCED': score += 5
 
-        # 5. Justeringer for hvilepuls
-        if rhr and rhr > 60: 
-            score -= 8
+        if rhr and rhr > 60: score -= 8
 
-        # 6. Justeringer for døgnets gennemsnitlige stressniveau
         stress_text = "Stress: Ikke tilgængelig"
         if stress_avg is not None:
             stress_text = f"Stress: {stress_avg}"
-            if stress_avg > 40:
-                score -= 15
-            elif stress_avg > 25:
-                score -= 8
-            else:
-                score += 5
+            if stress_avg > 40: score -= 15
+            elif stress_avg > 25: score -= 8
+            else: score += 5
 
         score = max(1, min(100, score))
         status = "Høj" if score >= 70 else ("Moderat" if score >= 45 else "Lav")
         
-        # Saml beskrivelsen til dashboardet
         desc_parts = []
         if body_battery is not None: desc_parts.append(f"BB: {body_battery}")
         if sleep_score is not None: desc_parts.append(f"Søvn: {sleep_score}/100")
@@ -223,7 +209,6 @@ class GarminSync:
         desc_parts.append(stress_text)
 
         description = " • ".join(desc_parts)
-
         return {"score": score, "status": status, "description": description}
 
     def _normalize_activity(self, raw: dict) -> dict:
@@ -328,7 +313,7 @@ async def sync_status():
 @app.post("/api/sync/now")
 async def sync_now():
     await scheduled_sync()
-    return {"message": "Synkronisering gennemført (Træningsparathed opdateret)", "last_sync": datetime.now().isoformat()}
+    return {"message": "Synkronisering gennemført", "last_sync": datetime.now().isoformat()}
 
 @app.get("/api/health/resting-hr")
 async def get_resting_hr():
@@ -347,7 +332,7 @@ async def get_running_pace_30days():
           AND avg_pace_minutes IS NOT NULL 
           AND avg_pace_minutes > 0
         ORDER BY date ASC
-    """).fetchall()
+    """></fetchall>
     conn.close()
     return [dict(row) for row in rows]
 
@@ -369,7 +354,40 @@ async def get_activity_by_date(date_str: str):
     conn.close()
     if not row:
         raise HTTPException(404, "Ingen aktivitet fundet")
-    return dict(row)
+    
+    activity_dict = dict(row)
+    act_id = activity_dict.get("activity_id")
+
+    # Hent detaljerede tidsserier (pulskurve sekund for sekund) direkte fra Garmin Connect
+    heart_rate_samples = []
+    if garmin_sync.client or garmin_sync.login():
+        try:
+            details = garmin_sync.client.get_activity_details(act_id)
+            # Garmin returnerer typisk "metricDescriptors" og "activityDetailMetrics"
+            metrics = details.get("activityDetailMetrics", [])
+            hr_index = -1
+            time_index = -1
+            
+            descriptors = details.get("metricDescriptors", [])
+            for idx, desc in enumerate(descriptors):
+                key = desc.get("key", "")
+                if key == "directHeartRate" or key == "heartRate":
+                    hr_index = idx
+                elif key == "sumElapsedDuration" or key == "elapsedDuration" or key == "timestamp":
+                    time_index = idx
+
+            for m in metrics:
+                vals = m.get("metrics", [])
+                if hr_index != -1 and time_index != -1 and len(vals) > max(hr_index, time_index):
+                    t = vals[time_index]
+                    hr = vals[hr_index]
+                    if hr is not None and hr > 0:
+                        heart_rate_samples.append({"time": t, "hr": hr})
+        except Exception as e:
+            logger.error(f"Kunne ikke hente pulskurve fra Garmin: {e}")
+
+    activity_dict["heart_rate_samples"] = heart_rate_samples
+    return activity_dict
 
 @app.get("/activity", response_class=HTMLResponse)
 async def activity_page():
