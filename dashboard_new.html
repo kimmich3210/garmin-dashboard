@@ -111,7 +111,7 @@
             padding: 2px 4px; border-radius: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left;
         }
 
-        /* Activity Detail Modal / View (Strava Style) */
+        /* Activity Detail Modal / View */
         .activity-detail-card {
             background-color: var(--garmin-card); border-radius: 6px; padding: 20px;
             border: 1px solid var(--garmin-border); display: none;
@@ -190,7 +190,7 @@
             <div class="readiness-circle-badge" id="readinessBadge">--%</div>
         </div>
 
-        <!-- Månedlig Kalender (Strava Style) -->
+        <!-- Månedlig Kalender -->
         <div class="calendar-card">
             <div class="calendar-header">
                 <h3 id="calendarMonthTitle">Træningskalender</h3>
@@ -200,7 +200,7 @@
             </div>
         </div>
 
-        <!-- Aktivitets Detalje boks (Viser når man klikker på en dag) -->
+        <!-- Aktivitets Detalje boks -->
         <div class="activity-detail-card" id="activityDetailCard">
             <div class="strava-header">
                 <div class="strava-title-group">
@@ -250,7 +250,6 @@
         let rhrChart, pace30Chart;
         let cachedActivities = [];
 
-        // Vis dags dato i headeren
         const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
         const todayStr = new Date().toLocaleDateString('da-DK', options);
         document.getElementById('dateText').textContent = todayStr.charAt(0).toUpperCase() + todayStr.slice(1);
@@ -281,36 +280,35 @@
                 const year = now.getFullYear();
                 const month = now.getMonth();
                 
-                const monthNames = ["Januar", "Februar", "Marts", "April", "Maj", "Juni", "Juli", "August", "September", "Oktober", "November", "December"];
+                const monthNames = ["Januar", "Februar", "Marts", "April", "Maj", "Juni", "Juli", "August", "September", "Oktober", "November", "Dezember"];
                 document.getElementById('calendarMonthTitle').textContent = `Træningskalender — ${monthNames[month]} ${year}`;
 
                 const firstDay = new Date(year, month, 1).getDay();
-                const adjustedFirstDay = firstDay === 0 ? 6 : firstDay - 1; // Mandag som start
+                const adjustedFirstDay = firstDay === 0 ? 6 : firstDay - 1;
                 const daysInMonth = new Date(year, month + 1, 0).getDate();
 
                 const grid = document.getElementById('calendarGrid');
                 grid.innerHTML = '';
 
-                // Ugedags-overskrifter
                 ['Man', 'Tir', 'Ons', 'Tor', 'Fre', 'Lør', 'Søn'].forEach(d => {
                     grid.innerHTML += `<div class="cal-day-name">${d}</div>`;
                 });
 
-                // Tomme felter før første dag
                 for (let i = 0; i < adjustedFirstDay; i++) {
                     grid.innerHTML += `<div class="cal-cell" style="opacity: 0.3;"></div>`;
                 }
 
-                // Dage i måneden
                 for (let day = 1; day <= daysInMonth; day++) {
                     const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-                    const dayActivities = cachedActivities.filter(a => a.date && a.date.startsWith(dateStr));
+                    
+                    // Matcher datoer uanset tidszoner (tjekker om datoen indeholder YYYY-MM-DD)
+                    const dayActivities = cachedActivities.filter(a => a.date && a.date.includes(dateStr));
 
                     let badgeHtml = '';
                     let hasActClass = '';
                     if (dayActivities.length > 0) {
                         hasActClass = 'has-activity';
-                        badgeHtml = `<div class="cal-activity-badge">${dayActivities[0].title || 'Træning'}</div>`;
+                        badgeHtml = `<div class="cal-activity-badge">${dayActivities[0].title || 'Løb'}</div>`;
                     }
 
                     grid.innerHTML += `
@@ -324,7 +322,7 @@
         }
 
         function showActivityDetails(dateStr) {
-            const match = cachedActivities.find(a => a.date && a.date.startsWith(dateStr));
+            const match = cachedActivities.find(a => a.date && a.date.includes(dateStr));
             const card = document.getElementById('activityDetailCard');
             const linkBtn = document.getElementById('detLinkBtn');
             
