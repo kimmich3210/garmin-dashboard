@@ -115,7 +115,7 @@ class GarminSync:
         return rhr_data
 
     def fetch_training_readiness_comprehensive(self) -> dict:
-        """Inkluderer søvn, Body Battery, HRV, stress, hvilepuls OG seneste løbeture/belastning."""
+        """Kombinerer søvn, Body Battery, seneste løb, HRV, hvilepuls og døgnets stressniveau."""
         if not self.client:
             if not self.login():
                 return {"score": 75, "status": "Høj", "description": "Afventer forbindelse til Garmin Connect."}
@@ -145,7 +145,7 @@ class GarminSync:
         except:
             pass
 
-        # Tjek seneste løb i databasen for at vurdere træningsbelastning
+        # 1. Tjek seneste løb og træningsbelastning i databasen
         recent_run_penalty = 0
         last_run_text = "Ingen nyere løb"
         try:
@@ -166,10 +166,10 @@ class GarminSync:
                 dist_km = (row["distance"] or 0) / 1000
                 
                 if days_ago == 0:
-                    recent_run_penalty = int(dist_km * 1.5) # Hård straf hvis løbet i dag
+                    recent_run_penalty = int(dist_km * 1.5)
                     last_run_text = f"Løbet i dag ({dist_km:.1f} km)"
                 elif days_ago == 1:
-                    recent_run_penalty = int(dist_km * 0.8) # Lettere straf for gårsdagens løb
+                    recent_run_penalty = int(dist_km * 0.8)
                     last_run_text = f"Seneste løb i går ({dist_km:.1f} km)"
                 elif days_ago <= 2:
                     recent_run_penalty = int(dist_km * 0.3)
@@ -177,7 +177,7 @@ class GarminSync:
         except:
             pass
 
-        # Basis beregning ud fra Body Battery og Søvn
+        # 2. Basis beregning ud fra Søvnscore og Body Battery
         score_parts = []
         if sleep_score is not None: score_parts.append(sleep_score * 0.5)
         if body_battery is not None: score_parts.append(body_battery * 0.5)
@@ -187,26 +187,40 @@ class GarminSync:
         else:
             score = 75
 
-        # Træk fra for seneste træningsbelastning
+        # 3. Træk fra for træningsbelastning fra seneste løb
         score -= recent_run_penalty
 
-        # Finjusteringer baseret på HRV, hvilepuls og stress
-        if hrv_status == 'UNBALANCED': score -= 12
-        elif hrv_status == 'BALANCED': score += 5
+        # 4. Justeringer for HRV-status
+        if hrv_status == 'UNBALANCED': 
+            score -= 12
+        elif hrv_status == 'BALANCED':
+            score += 5
 
-        if rhr and rhr > 60: score -= 8
-        if stress_avg:
-            if stress_avg > 40: score -= 10
-            elif stress_avg < 25: score += 5
+        # 5. Justeringer for hvilepuls
+        if rhr and rhr > 60: 
+            score -= 8
+
+        # 6. Justeringer for døgnets gennemsnitlige stressniveau
+        stress_text = "Stress: Ikke tilgængelig"
+        if stress_avg is not None:
+            stress_text = f"Stress: {stress_avg}"
+            if stress_avg > 40:
+                score -= 15
+            elif stress_avg > 25:
+                score -= 8
+            else:
+                score += 5
 
         score = max(1, min(100, score))
         status = "Høj" if score >= 70 else ("Moderat" if score >= 45 else "Lav")
         
+        # Saml beskrivelsen til dashboardet
         desc_parts = []
-        if sleep_score is not None: desc_parts.append(f"Søvn: {sleep_score}/100")
         if body_battery is not None: desc_parts.append(f"BB: {body_battery}")
+        if sleep_score is not None: desc_parts.append(f"Søvn: {sleep_score}/100")
         desc_parts.append(last_run_text)
         if hrv_status: desc_parts.append(f"HRV: {hrv_status}")
+        desc_parts.append(stress_text)
 
         description = " • ".join(desc_parts)
 
@@ -314,7 +328,7 @@ async def sync_status():
 @app.post("/api/sync/now")
 async def sync_now():
     await scheduled_sync()
-    return {"message": "Træningsparathed opdateret med seneste løb", "last_sync": datetime.now().isoformat()}
+    return {"message": "Synkronisering gennemført (Træningsparathed opdateret)", "last_sync": datetime.now().isoformat()}
 
 @app.get("/api/health/resting-hr")
 async def get_resting_hr():
