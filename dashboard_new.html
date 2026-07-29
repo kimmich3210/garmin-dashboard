@@ -16,6 +16,7 @@
             --garmin-border: #2a3447;
             --garmin-green: #22c55e;
             --garmin-red: #ef4444;
+            --strava-orange: #fc4c02;
         }
 
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -35,15 +36,11 @@
             margin: 0 auto;
         }
 
-        /* Garmin Header Bar */
+        /* Header */
         .garmin-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            background-color: var(--garmin-card);
-            padding: 15px 25px;
-            border-radius: 6px;
-            border-bottom: 3px solid var(--garmin-blue);
+            display: flex; justify-content: space-between; align-items: center;
+            background-color: var(--garmin-card); padding: 15px 25px;
+            border-radius: 6px; border-bottom: 3px solid var(--garmin-blue);
             box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.2);
         }
         .brand { display: flex; align-items: center; gap: 12px; }
@@ -54,80 +51,106 @@
         .brand-title h1 { font-size: 1.2rem; color: #fff; font-weight: 600; }
         .brand-title p { font-size: 0.8rem; color: var(--garmin-text-muted); }
 
-        /* Training Readiness Widget (Garmin Style) */
+        /* Training Readiness Widget */
         .readiness-card {
-            background-color: var(--garmin-card);
-            border-radius: 6px;
-            padding: 20px 25px;
-            border: 1px solid var(--garmin-border);
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            background-color: var(--garmin-card); border-radius: 6px; padding: 20px 25px;
+            border: 1px solid var(--garmin-border); display: flex; align-items: center; justify-content: space-between;
         }
-        .readiness-left h3 { font-size: 0.9rem; color: var(--garmin-text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 5px; }
+        .readiness-left h3 { font-size: 0.9rem; color: var(--garmin-text-muted); text-transform: uppercase; margin-bottom: 5px; }
         .readiness-score-container { display: flex; align-items: baseline; gap: 10px; }
         .readiness-score { font-size: 2.8rem; font-weight: 700; color: #fff; }
         .readiness-status { font-size: 1.2rem; font-weight: 600; color: var(--garmin-cyan); }
         .readiness-desc { font-size: 0.85rem; color: var(--garmin-text-muted); margin-top: 4px; }
-        
         .readiness-circle-badge {
             width: 75px; height: 75px; border-radius: 50%;
             background: radial-gradient(circle, #12161f 60%, var(--garmin-cyan) 100%);
             display: flex; align-items: center; justify-content: center;
-            border: 3px solid var(--garmin-cyan);
-            font-weight: bold; font-size: 1.2rem; color: #fff;
-            box-shadow: 0 0 12px rgba(0, 193, 214, 0.3);
+            border: 3px solid var(--garmin-cyan); font-weight: bold; font-size: 1.2rem; color: #fff;
         }
 
-        /* Controls / Sync Bar */
+        /* Calendar Section (Strava Style) */
+        .calendar-card {
+            background-color: var(--garmin-card); border-radius: 6px; padding: 20px;
+            border: 1px solid var(--garmin-border);
+        }
+        .calendar-header {
+            display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;
+        }
+        .calendar-header h3 { font-size: 1rem; color: #fff; font-weight: 600; text-transform: uppercase; }
+        .calendar-grid {
+            display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; text-align: center;
+        }
+        .cal-day-name { font-size: 0.75rem; color: var(--garmin-text-muted); font-weight: bold; padding-bottom: 8px; }
+        .cal-cell {
+            background: #12161f; border: 1px solid var(--garmin-border); border-radius: 4px;
+            min-height: 70px; padding: 6px; display: flex; flex-direction: column; justify-content: space-between;
+            cursor: pointer; transition: border-color 0.2s;
+        }
+        .cal-cell:hover { border-color: var(--garmin-cyan); }
+        .cal-cell.has-activity { border-left: 3px solid var(--strava-orange); background: #182232; }
+        .cal-date { font-size: 0.75rem; color: var(--garmin-text-muted); text-align: left; }
+        .cal-activity-badge {
+            font-size: 0.65rem; background: rgba(252, 76, 2, 0.2); color: var(--strava-orange);
+            padding: 2px 4px; border-radius: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left;
+        }
+
+        /* Activity Detail Modal / View (Strava Style) */
+        .activity-detail-card {
+            background-color: var(--garmin-card); border-radius: 6px; padding: 20px;
+            border: 1px solid var(--garmin-border); display: none;
+        }
+        .activity-detail-card.active { display: block; }
+        .strava-header { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+        .strava-icon { background: var(--strava-orange); color: #fff; font-weight: bold; padding: 4px 8px; border-radius: 4px; font-size: 0.8rem; }
+        .strava-title { font-size: 1.1rem; font-weight: bold; color: #fff; }
+        .strava-meta { font-size: 0.8rem; color: var(--garmin-text-muted); margin-bottom: 15px; }
+        .strava-stats-grid {
+            display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; background: #12161f;
+            padding: 15px; border-radius: 6px; margin-bottom: 15px; text-align: center;
+        }
+        .stat-box .label { font-size: 0.75rem; color: var(--garmin-text-muted); }
+        .stat-box .value { font-size: 1.2rem; font-weight: bold; color: #fff; margin-top: 4px; }
+
+        /* Controls */
         .controls {
             display: flex; justify-content: space-between; align-items: center;
-            background-color: var(--garmin-card); padding: 12px 20px;
-            border-radius: 6px; border: 1px solid var(--garmin-border);
+            background-color: var(--garmin-card); padding: 12px 20px; border-radius: 6px; border: 1px solid var(--garmin-border);
         }
         .sync-status { display: flex; align-items: center; gap: 10px; }
         .sync-indicator { width: 9px; height: 9px; border-radius: 50%; }
         .sync-indicator.active { background: var(--garmin-green); box-shadow: 0 0 8px var(--garmin-green); }
         .sync-indicator.inactive { background: var(--garmin-red); }
         .sync-info { font-size: 0.85rem; color: var(--garmin-text-muted); }
-
         .sync-btn {
             background-color: var(--garmin-blue); color: #fff; border: none;
-            padding: 8px 16px; border-radius: 4px; cursor: pointer; font-weight: 600;
-            font-size: 0.85rem; transition: background 0.2s;
+            padding: 8px 16px; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 0.85rem;
         }
         .sync-btn:hover { background-color: #005fa3; }
-        .sync-btn:disabled { background-color: #334155; cursor: not-allowed; }
 
-        /* Chart Cards */
+        /* Charts */
         .card {
-            background-color: var(--garmin-card); border-radius: 6px; padding: 20px;
-            border: 1px solid var(--garmin-border); box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            background-color: var(--garmin-card); border-radius: 6px; padding: 20px; border: 1px solid var(--garmin-border);
         }
-        .card-header {
-            display: flex; justify-content: space-between; align-items: center;
-            margin-bottom: 15px; border-bottom: 1px solid var(--garmin-border); padding-bottom: 10px;
-        }
-        .card-header h3 { font-size: 1rem; color: #fff; font-weight: 600; letter-spacing: 0.5px; }
+        .card-header { border-bottom: 1px solid var(--garmin-border); padding-bottom: 10px; margin-bottom: 15px; }
+        .card-header h3 { font-size: 1rem; color: #fff; font-weight: 600; }
         .chart-wrapper { position: relative; height: 320px; width: 100%; }
     </style>
 </head>
 <body>
 
     <div class="dashboard-grid">
-        <!-- Garmin Header Bar -->
+        <!-- Header -->
         <header class="garmin-header">
             <div class="brand">
                 <div class="brand-logo">GARMIN</div>
                 <div class="brand-title">
                     <h1>Løbe & Puls Dashboard</h1>
-                    <p>Mål: Pace &lt; 5:00 min/km | MAF Puls &lt; 155 | 10+ km</p>
+                    <p>Kim Brian Enhaynes Lungay | Mål: Pace &lt; 5:00 min/km</p>
                 </div>
             </div>
         </header>
 
-        <!-- TRAINING READINESS WIDGET (ØVERST) MED DATO -->
+        <!-- Training Readiness -->
         <div class="readiness-card">
             <div class="readiness-left">
                 <h3 id="readinessTitle">Træningsparathed</h3>
@@ -135,30 +158,54 @@
                     <div class="readiness-score" id="readinessScore">--%</div>
                     <div class="readiness-status" id="readinessStatus">Opdaterer...</div>
                 </div>
-                <div class="readiness-desc" id="readinessDesc">Henter biometriske data...</div>
+                <div class="readiness-desc" id="readinessDesc">Henter data...</div>
             </div>
             <div class="readiness-circle-badge" id="readinessBadge">--%</div>
         </div>
 
-        <!-- Sync Control Panel -->
+        <!-- Månedlig Kalender (Strava Style) -->
+        <div class="calendar-card">
+            <div class="calendar-header">
+                <h3 id="calendarMonthTitle">Træningskalender</h3>
+            </div>
+            <div class="calendar-grid" id="calendarGrid">
+                <!-- Genereres via JS -->
+            </div>
+        </div>
+
+        <!-- Aktivitets Detalje boks (Viser når man klikker på en dag) -->
+        <div class="activity-detail-card" id="activityDetailCard">
+            <div class="strava-header">
+                <span class="strava-icon">STRAVA / GARMIN</span>
+                <span class="strava-title" id="detTitle">Vælg en dag i kalenderen</span>
+            </div>
+            <div class="strava-meta" id="detMeta">Tryk på en dag med træning for at se splits, puls og data.</div>
+            <div class="strava-stats-grid">
+                <div class="stat-box"><div class="label">DISTANCE</div><div class="value" id="detDist">-- km</div></div>
+                <div class="stat-box"><div class="label">TID</div><div class="value" id="detTime">--:--</div></div>
+                <div class="stat-box"><div class="label">PACE</div><div class="value" id="detPace">-- min/km</div></div>
+                <div class="stat-box"><div class="label">PULS</div><div class="value" id="detHr">-- bpm</div></div>
+            </div>
+        </div>
+
+        <!-- Sync Control -->
         <div class="controls">
             <div class="sync-status">
                 <div class="sync-indicator" id="syncIndicator"></div>
                 <div class="sync-info">
-                    <div id="syncStatusText">Forbinder til Connect...</div>
+                    <div id="syncStatusText">Forbinder...</div>
                     <div id="lastSyncText"></div>
                 </div>
             </div>
             <button class="sync-btn" id="syncBtn" onclick="triggerSync()">Synkroniser nu</button>
         </div>
 
-        <!-- Pace Chart Card -->
+        <!-- Grafer -->
         <div class="card">
             <div class="card-header"><h3>LØBE-PACE (SIDSTE 30 DAGE)</h3></div>
             <div class="chart-wrapper"><canvas id="pace30Chart"></canvas></div>
         </div>
 
-        <!-- Resting Heart Rate Chart Card -->
         <div class="card">
             <div class="card-header"><h3>HVILEPULS (SIDSTE 14 DAGE)</h3></div>
             <div class="chart-wrapper"><canvas id="rhrChart"></canvas></div>
@@ -171,6 +218,7 @@
         Chart.defaults.font.family = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
 
         let rhrChart, pace30Chart;
+        let cachedActivities = [];
 
         function formatPace(m) {
             if (!m) return '--';
@@ -180,19 +228,89 @@
 
         async function loadReadiness() {
             try {
-                // Sæt dags dato pænt ind i overskriften
                 const todayFormatted = new Date().toLocaleDateString('da-DK', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
                 document.getElementById('readinessTitle').textContent = `Træningsparathed — ${todayFormatted}`;
-
                 const res = await fetch('/api/training/readiness');
                 const data = await res.json();
                 document.getElementById('readinessScore').textContent = `${data.score}%`;
                 document.getElementById('readinessBadge').textContent = `${data.score}%`;
                 document.getElementById('readinessStatus').textContent = `• ${data.status}`;
                 document.getElementById('readinessDesc').textContent = data.description;
-            } catch (e) {
-                console.error('Fejl ved indlæsning af training readiness', e);
+            } catch (e) { console.error(e); }
+        }
+
+        async function loadCalendar() {
+            try {
+                const res = await fetch('/api/activities/all');
+                cachedActivities = await res.json();
+                
+                const now = new Date();
+                const year = now.getFullYear();
+                const month = now.getMonth();
+                
+                const monthNames = ["Januar", "Februar", "Marts", "April", "Maj", "Juni", "Juli", "August", "September", "Oktober", "November", "December"];
+                document.getElementById('calendarMonthTitle').textContent = `Træningskalender — ${monthNames[month]} ${year}`;
+
+                const firstDay = new Date(year, month, 1).getDay();
+                const adjustedFirstDay = firstDay === 0 ? 6 : firstDay - 1; // Mandag som start
+                const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+                const grid = document.getElementById('calendarGrid');
+                grid.innerHTML = '';
+
+                // Ugedags-overskrifter
+                ['Man', 'Tir', 'Ons', 'Tor', 'Fre', 'Lør', 'Søn'].forEach(d => {
+                    grid.innerHTML += `<div class="cal-day-name">${d}</div>`;
+                });
+
+                // Tomme felter før første dag
+                for (let i = 0; i < adjustedFirstDay; i++) {
+                    grid.innerHTML += `<div class="cal-cell" style="opacity: 0.3;"></div>`;
+                }
+
+                // Dage i måneden
+                for (let day = 1; day <= daysInMonth; day++) {
+                    const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                    const dayActivities = cachedActivities.filter(a => a.date && a.date.startsWith(dateStr));
+
+                    let badgeHtml = '';
+                    let hasActClass = '';
+                    if (dayActivities.length > 0) {
+                        hasActClass = 'has-activity';
+                        badgeHtml = `<div class="cal-activity-badge">${dayActivities[0].title || 'Træning'}</div>`;
+                    }
+
+                    grid.innerHTML += `
+                        <div class="cal-cell ${hasActClass}" onclick="showActivityDetails('${dateStr}')">
+                            <div class="cal-date">${day}</div>
+                            ${badgeHtml}
+                        </div>
+                    `;
+                }
+            } catch (e) { console.error('Fejl ved indlæsning af kalender', e); }
+        }
+
+        function showActivityDetails(dateStr) {
+            const match = cachedActivities.find(a => a.date && a.date.startsWith(dateStr));
+            const card = document.getElementById('activityDetailCard');
+            
+            if (!match) {
+                card.classList.remove('active');
+                return;
             }
+
+            card.classList.add('active');
+            document.getElementById('detTitle').textContent = match.title || 'Løbeaktivitet';
+            
+            const d = new Date(match.date);
+            document.getElementById('detMeta').textContent = `${d.toLocaleString('da-DK')} • Vallensbæk`;
+            
+            const distKm = match.distance ? (match.distance / 1000).toFixed(2) + ' km' : '-- km';
+            const durationMin = match.duration_minutes ? Math.floor(match.duration_minutes) + ' min' : '--';
+            document.getElementById('detDist').textContent = distKm;
+            document.getElementById('detTime').textContent = durationMin;
+            document.getElementById('detPace').textContent = formatPace(match.avg_pace_minutes) + ' min/km';
+            document.getElementById('detHr').textContent = (match.avg_hr || '--') + ' bpm';
         }
 
         async function loadSyncStatus() {
@@ -202,31 +320,23 @@
                 const indicator = document.getElementById('syncIndicator');
                 const statusText = document.getElementById('syncStatusText');
                 const lastSync = document.getElementById('lastSyncText');
-                const btn = document.getElementById('syncBtn');
-
                 if (data.auto_sync_enabled) {
                     indicator.className = 'sync-indicator active';
                     statusText.textContent = `Auto-sync aktiv (hver ${data.sync_interval_hours}t)`;
-                    btn.style.display = 'inline-block';
                 } else {
                     indicator.className = 'sync-indicator inactive';
                     statusText.textContent = 'Auto-sync deaktiveret';
                 }
-
                 if (data.last_sync) {
-                    const d = new Date(data.last_sync);
-                    lastSync.textContent = `Sidst synkroniseret: ${d.toLocaleString('da-DK')}`;
+                    lastSync.textContent = `Sidst synkroniseret: ${new Date(data.last_sync).toLocaleString('da-DK')}`;
                 }
-            } catch (e) {
-                console.error('Fejl ved indlæsning af sync-status', e);
-            }
+            } catch (e) { console.error(e); }
         }
 
         async function triggerSync() {
             const btn = document.getElementById('syncBtn');
             btn.textContent = 'Synkroniserer...';
             btn.disabled = true;
-
             try {
                 const res = await fetch('/api/sync/now', { method: 'POST' });
                 const data = await res.json();
@@ -237,7 +347,6 @@
             } finally {
                 btn.textContent = 'Synkroniser nu';
                 btn.disabled = false;
-                loadSyncStatus();
             }
         }
 
@@ -247,7 +356,6 @@
                 const data = await res.json();
                 const ctx = document.getElementById('pace30Chart').getContext('2d');
                 if (pace30Chart) pace30Chart.destroy();
-
                 pace30Chart = new Chart(ctx, {
                     type: 'line',
                     data: {
@@ -255,45 +363,20 @@
                         datasets: [{
                             label: 'Pace (min/km)',
                             data: data.map(d => d.avg_pace_min_km),
-                            borderColor: '#00c1d6',
-                            backgroundColor: 'rgba(0, 193, 214, 0.08)',
-                            fill: true,
-                            tension: 0.2,
-                            borderWidth: 2,
-                            pointRadius: 3,
-                            pointBackgroundColor: '#00c1d6'
+                            borderColor: '#00c1d6', backgroundColor: 'rgba(0, 193, 214, 0.08)',
+                            fill: true, tension: 0.2, borderWidth: 2, pointRadius: 3, pointBackgroundColor: '#00c1d6'
                         }]
                     },
                     options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
+                        responsive: true, maintainAspectRatio: false,
                         scales: {
-                            y: {
-                                reverse: true,
-                                grid: { color: '#2a3447' },
-                                title: { display: true, text: 'Min/km', color: '#94a3b8' },
-                                ticks: { callback: v => formatPace(v) }
-                            },
+                            y: { reverse: true, grid: { color: '#2a3447' }, title: { display: true, text: 'Min/km', color: '#94a3b8' }, ticks: { callback: v => formatPace(v) } },
                             x: { grid: { display: false } }
                         },
-                        plugins: {
-                            legend: { display: false },
-                            tooltip: {
-                                backgroundColor: '#1c2230',
-                                titleColor: '#fff',
-                                bodyColor: '#00c1d6',
-                                borderColor: '#2a3447',
-                                borderWidth: 1,
-                                callbacks: {
-                                    label: ctx => ` Pace: ${formatPace(ctx.raw)} min/km`
-                                }
-                            }
-                        }
+                        plugins: { legend: { display: false } }
                     }
                 });
-            } catch (e) {
-                console.error('Fejl ved pace-graf', e);
-            }
+            } catch (e) { console.error(e); }
         }
 
         async function loadRHRChart() {
@@ -302,7 +385,6 @@
                 const data = await res.json();
                 const ctx = document.getElementById('rhrChart').getContext('2d');
                 if (rhrChart) rhrChart.destroy();
-                
                 rhrChart = new Chart(ctx, {
                     type: 'line',
                     data: {
@@ -310,49 +392,26 @@
                         datasets: [{
                             label: 'Hvilepuls (bpm)',
                             data: data.map(d => d.resting_hr),
-                            borderColor: '#ef4444',
-                            backgroundColor: 'rgba(239, 68, 68, 0.08)',
-                            fill: true,
-                            tension: 0.2,
-                            borderWidth: 2,
-                            pointRadius: 3,
-                            pointBackgroundColor: '#ef4444'
+                            borderColor: '#ef4444', backgroundColor: 'rgba(239, 68, 68, 0.08)',
+                            fill: true, tension: 0.2, borderWidth: 2, pointRadius: 3, pointBackgroundColor: '#ef4444'
                         }]
                     },
                     options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
+                        responsive: true, maintainAspectRatio: false,
                         scales: {
-                            y: {
-                                grid: { color: '#2a3447' },
-                                title: { display: true, text: 'BPM', color: '#94a3b8' },
-                                beginAtZero: false
-                            },
+                            y: { grid: { color: '#2a3447' }, title: { display: true, text: 'BPM', color: '#94a3b8' }, beginAtZero: false },
                             x: { grid: { display: false } }
                         },
-                        plugins: {
-                            legend: { display: false },
-                            tooltip: {
-                                backgroundColor: '#1c2230',
-                                titleColor: '#fff',
-                                bodyColor: '#ef4444',
-                                borderColor: '#2a3447',
-                                borderWidth: 1,
-                                callbacks: {
-                                    label: ctx => ` Hvilepuls: ${ctx.raw} bpm`
-                                }
-                            }
-                        }
+                        plugins: { legend: { display: false } }
                     }
                 });
-            } catch (e) {
-                console.error('Fejl ved hvilepuls-graf', e);
-            }
+            } catch (e) { console.error(e); }
         }
 
         async function loadAllData() {
             await Promise.all([
                 loadReadiness(),
+                loadCalendar(),
                 loadSyncStatus(),
                 loadPace30Chart(),
                 loadRHRChart()

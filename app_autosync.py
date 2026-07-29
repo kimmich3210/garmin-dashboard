@@ -140,20 +140,66 @@ class GarminSync:
                 
         return rhr_data
 
+    def fetch_training_readiness_comprehensive(self) -> dict:
+        if not self.client:
+            if not self.login():
+                return {"score": 70, "status": "Moderat", "description": "Afventer Garmin-forbindelse"}
+
+        today_str = datetime.now().strftime("%Y-%m-%d")
+        sleep_score, hrv_status, avg_stress, body_battery = None, None, None, None
+        
+        try:
+            sleep_data = self.client.get_sleep_data(today_str)
+            if sleep_data and "dailySleepDTO" in sleep_data:
+                sleep_score = sleep_data["dailySleepDTO"].get("sleepScores", {}).get("overall", {}).get("value")
+        except Exception:
+            pass
+
+        try:
+            hrv_data = self.client.get_hrv_data(today_str)
+            if hrv_data and "hrvSummary" in hrv_data:
+                hrv_status = hrv_data["hrvSummary"].get("status")
+        except Exception:
+            pass
+
+        try:
+            stats = self.client.get_stats(today_str)
+            avg_stress = stats.get("averageStressLevel")
+            body_battery = stats.get("bodyBatteryMostRecentValue")
+        except Exception:
+            pass
+
+        score_components = []
+        if sleep_score is not None: score_components.append(sleep_score)
+        if body_battery is not None: score_components.append(body_battery)
+        
+        if score_components:
+            final_score = int(sum(score_components) / len(score_components))
+            if hrv_status == 'UNBALANCED': final_score = max(10, final_score - 15)
+            if avg_stress and avg_stress > 40: final_score = max(10, final_score - 10)
+            final_score = max(10, min(98, final_score))
+        else:
+            final_score = 75
+
+        if final_score >= 75:
+            status, desc = "Høj", f"Optimal restitution. Søvnscore: {sleep_score or 'N/A'}, BB: {body_battery or 'N/A'}"
+        elif final_score >= 50:
+            status, desc = "Moderat", f"God balance. HRV: {hrv_status or 'Normal'}, Stress: {avg_stress or 'N/A'}"
+        else:
+            status, desc = "Lav", "Kroppen er belastet. Prioriter hvile."
+
+        return {"score": final_score, "status": status, "description": desc}
+
     def _normalize_activity(self, raw: dict) -> dict:
         def safe_get(key, default=None):
             val = raw.get(key)
             return val if val is not None else default
         
-        def meters_to_km(m):
-            return (m / 1000.0) if m else None
-        
         def seconds_to_minutes(s):
             return s / 60 if s else None
         
         def mps_to_metric_pace(speed):
-            if not speed or speed == 0:
-                return None
+            if not speed or speed == 0: return None
             return (1000 / speed) / 60
         
         return {
@@ -167,6 +213,8 @@ class GarminSync:
             "max_hr": safe_get("maxHR"),
             "avg_pace_minutes": mps_to_metric_pace(safe_get("averageSpeed")),
             "best_pace_minutes": mps_to_metric_pace(safe_get("maxSpeed")),
+            "device": safe_get("deviceModelName", "Garmin enhed"),
+            "avg_cadence": safe_get("averageRunningCadenceInStepsPerMinute")
         }
 
 
@@ -174,12 +222,9 @@ garmin_sync = GarminSync()
 
 
 def save_activities_to_db(activities: list[dict]) -> int:
-    if not activities:
-        return 0
-    
+    if not activities: return 0
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
-    
     inserted = 0
     for a in activities:
         try:
@@ -196,15 +241,13 @@ def save_activities_to_db(activities: list[dict]) -> int:
             inserted += 1
         except Exception as e:
             logger.error(f"Error inserting activity: {e}")
-    
     conn.commit()
     conn.close()
     return inserted
 
 
 def save_resting_heart_rate_to_db(rhr_list: list[dict]):
-    if not rhr_list:
-        return
+    if not rhr_list: return
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     for item in rhr_list:
@@ -214,62 +257,6 @@ def save_resting_heart_rate_to_db(rhr_list: list[dict]):
         """, (item["date"], item["resting_hr"]))
     conn.commit()
     conn.close()
-
-
-def calculate_training_readiness():
-    """Udregner en Garmin-lignende Training Readiness score (0-100%) baseret på hvilepuls og seneste træningsbelastning."""
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    
-    # Hent hvilepuls for de sidste 7 dage
-    rhr_rows = conn.execute("SELECT resting_hr FROM resting_heart_rate ORDER BY date DESC LIMIT 7").fetchall()
-    
-    # Hent træning de sidste 48 timer for at se nylig belastning
-    two_days_ago = (datetime.now() - timedelta(days=2)).isoformat()
-    recent_runs = conn.execute("""
-        SELECT distance, duration_minutes FROM activities 
-        WHERE date >= ? AND distance IS NOT NULL
-    """, (two_days_ago,)).fetchall()
-    
-    conn.close()
-    
-    # Standardværdi hvis ingen data er fundet endnu
-    if not rhr_rows:
-        return {"score": 75, "status": "God", "description": "Moderat restitution"}
-
-    rhr_values = [r["resting_hr"] for r in rhr_rows]
-    latest_rhr = rhr_values[0]
-    avg_rhr = sum(rhr_values) / len(rhr_values)
-    
-    # Logik: Hvis hvilepuls er lavere eller lig gennemsnit = god restitution. Hvis forhøjet = træt.
-    base_score = 80
-    if latest_rhr < avg_rhr:
-        base_score += 10
-    elif latest_rhr > avg_rhr + 2:
-        base_score -= 15
-
-    # Træk fra hvis der har været hård træning de sidste 48 timer
-    total_recent_km = sum([(r["distance"] or 0) / 1000.0 for r in recent_runs])
-    if total_recent_km > 15:
-        base_score -= 20
-    elif total_recent_km > 8:
-        base_score -= 10
-
-    score = max(15, min(98, int(base_score)))
-
-    # Bestem Garmin-status tekst
-    if score >= 75:
-        status, desc = "Høj", "Du er klar til en udfordrende træning!"
-    elif score >= 50:
-        status, desc = "Moderat", "God balance, lyt til kroppen."
-    else:
-        status, desc = "Lav", "Behov for hvile og restitution i dag."
-
-    return {
-        "score": score,
-        "status": status,
-        "description": desc
-    }
 
 
 async def scheduled_sync():
@@ -333,17 +320,10 @@ async def lifespan(app: FastAPI):
     if GARMIN_EMAIL and GARMIN_PASSWORD:
         logger.info("Credentials found, performing initial sync...")
         await scheduled_sync()
-        scheduler.add_job(
-            scheduled_sync,
-            'interval',
-            hours=SYNC_INTERVAL_HOURS,
-            id='garmin_sync',
-            replace_existing=True
-        )
+        scheduler.add_job(scheduled_sync, 'interval', hours=SYNC_INTERVAL_HOURS, id='garmin_sync', replace_existing=True)
         scheduler.start()
     yield
-    if scheduler.running:
-        scheduler.shutdown()
+    if scheduler.running: scheduler.shutdown()
 
 app = FastAPI(title="Garmin Dashboard", lifespan=lifespan)
 
@@ -364,7 +344,7 @@ async def sync_now():
     rhr_data = garmin_sync.fetch_resting_heart_rate(14)
     save_resting_heart_rate_to_db(rhr_data)
     garmin_sync.last_sync = datetime.now()
-    return {"message": "Sync og automatisk feedback fuldført", "last_sync": garmin_sync.last_sync.isoformat()}
+    return {"message": "Sync fuldført", "last_sync": garmin_sync.last_sync.isoformat()}
 
 @app.get("/api/health/resting-hr")
 async def get_resting_hr():
@@ -390,8 +370,15 @@ async def get_running_pace_30days():
 
 @app.get("/api/training/readiness")
 async def get_training_readiness():
-    """Endpoint der leverer Training Readiness score i procent."""
-    return calculate_training_readiness()
+    return garmin_sync.fetch_training_readiness_comprehensive()
+
+@app.get("/api/activities/all")
+async def get_all_activities():
+    """Endpoint der henter alle aktiviteter til kalenderen."""
+    conn = get_db_connection()
+    rows = conn.execute("SELECT * FROM activities ORDER BY date DESC").fetchall()
+    conn.close()
+    return [dict(row) for row in rows]
 
 @app.get("/", response_class=HTMLResponse)
 async def dashboard():
@@ -400,4 +387,4 @@ async def dashboard():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="0.0.0.0", poprt=8000)
