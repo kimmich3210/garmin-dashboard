@@ -3,45 +3,42 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Garmin & Strava Dashboard</title>
+    <title>Garmin Workout Dashboard</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         :root {
-            --garmin-dark: #12161f;
-            --garmin-card: #1c2230;
-            --garmin-blue: #007acc;
-            --garmin-cyan: #00c1d6;
-            --garmin-text: #e2e8f0;
-            --garmin-text-muted: #94a3b8;
-            --garmin-border: #2a3447;
-            --strava-orange: #fc4c02;
-            --garmin-green: #22c55e;
-            --garmin-red: #ef4444;
+            --bg-color: #0f172a;
+            --card-bg: #1e293b;
+            --text-color: #f8fafc;
+            --text-muted: #94a3b8;
+            --accent-color: #38bdf8;
+            --border-color: #334155;
+            --success-color: #22c55e;
         }
-        * { margin: 0; padding: 0; box-sizing: border-box; }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            background-color: var(--garmin-dark); color: var(--garmin-text);
-            min-height: 100vh; padding: 20px;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            padding: 20px;
         }
-        .container { max-width: 1100px; margin: 0 auto; display: grid; gap: 20px; }
-        
+        .container { max-width: 1200px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
+
         /* Header med levende grøn prik og dato */
         .dashboard-header {
             display: flex; justify-content: space-between; align-items: center;
-            background-color: var(--garmin-card); padding: 20px 25px; border-radius: 6px;
-            border: 1px solid var(--garmin-border); box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            background: var(--card-bg); padding: 20px; border-radius: 12px;
+            border: 1px solid var(--border-color);
         }
-        .title-area h1 { font-size: 1.6rem; color: #fff; margin-bottom: 4px; }
         .live-date-badge {
             display: inline-flex; align-items: center; gap: 8px;
-            font-size: 0.9rem; color: var(--garmin-text-muted); background: #12161f;
-            padding: 6px 12px; border-radius: 20px; border: 1px solid var(--garmin-border);
+            font-size: 0.95rem; color: var(--text-muted); background: #0f172a;
+            padding: 8px 14px; border-radius: 20px; border: 1px solid var(--border-color);
         }
         .live-dot {
-            width: 9px; height: 9px; background-color: var(--garmin-green);
+            width: 9px; height: 9px; background-color: var(--success-color);
             border-radius: 50%; display: inline-block;
-            box-shadow: 0 0 8px var(--garmin-green);
+            box-shadow: 0 0 8px var(--success-color);
             animation: pulse 2s infinite;
         }
         @keyframes pulse {
@@ -50,34 +47,31 @@
             100% { transform: scale(0.95); opacity: 0.8; }
         }
 
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; }
         .card {
-            background-color: var(--garmin-card); border-radius: 6px; padding: 25px;
-            border: 1px solid var(--garmin-border); box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 20px;
         }
-        .section-title { font-size: 1.1rem; color: #fff; margin-bottom: 15px; border-bottom: 1px solid var(--garmin-border); padding-bottom: 8px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px; }
-        
-        /* Aktivitetsliste */
-        .activity-list { display: grid; gap: 10px; max-height: 400px; overflow-y: auto; }
+        h2 { font-size: 1.2rem; margin-bottom: 15px; color: var(--accent-color); }
+        .activity-list { display: flex; flex-direction: column; gap: 10px; max-height: 400px; overflow-y: auto; }
         .activity-item {
-            background: #12161f; padding: 15px; border-radius: 6px; border: 1px solid var(--garmin-border);
-            display: flex; justify-content: space-between; align-items: center; text-decoration: none; color: inherit;
-            transition: border-color 0.2s, transform 0.2s;
+            background: #0f172a; padding: 12px; border-radius: 8px;
+            border: 1px solid var(--border-color); text-decoration: none; color: inherit;
+            display: flex; justify-content: space-between; align-items: center;
+            transition: border-color 0.2s;
         }
-        .activity-item:hover { border-color: var(--strava-orange); transform: translateX(4px); }
-        .act-name { font-weight: bold; color: #fff; font-size: 1.05rem; }
-        .act-details { font-size: 0.85rem; color: var(--garmin-text-muted); margin-top: 4px; }
-        .act-stats { text-align: right; font-size: 0.95rem; }
-
-        .chart-container { position: relative; height: 280px; width: 100%; margin-top: 15px; }
+        .activity-item:hover { border-color: var(--accent-color); }
     </style>
 </head>
 <body>
     <div class="container">
         <!-- TOP HEADER MED LIVE DATO OG PRIK -->
         <div class="dashboard-header">
-            <div class="title-area">
-                <h1>Garmin & Strava Dashboard</h1>
-                <p style="color: var(--garmin-text-muted); font-size: 0.85rem;">Kim Brian Enhaynes Lungay • Vallensbæk</p>
+            <div>
+                <h1>Garmin Dashboard</h1>
+                <p style="color: var(--text-muted); font-size: 0.85rem; margin-top: 2px;">Kim Brian Enhaynes Lungay</p>
             </div>
             <div class="live-date-badge" id="todayDateBadge">
                 <span class="live-dot"></span>
@@ -85,34 +79,25 @@
             </div>
         </div>
 
-        <!-- SENESTE AKTIVITETER -->
-        <div class="card">
-            <div class="section-title">Seneste Aktiviteter (Klik for detaljer & Athlete Intelligence)</div>
-            <div class="activity-list" id="activityList">
-                <div style="text-align: center; color: var(--garmin-text-muted); padding: 20px;">Henter aktiviteter...</div>
+        <div class="grid">
+            <div class="card" style="grid-column: span 2;">
+                <h2>Seneste Aktiviteter</h2>
+                <div class="activity-list" id="activityList">
+                    <p style="color: var(--text-muted);">Henter aktiviteter...</p>
+                </div>
             </div>
-        </div>
-
-        <!-- PACE GRAF 30 DAGE -->
-        <div class="card">
-            <div class="section-title">Løbepace over de seneste 30 dage</div>
-            <div class="chart-container"><canvas id="pace30Chart"></canvas></div>
         </div>
     </div>
 
     <script>
-        Chart.defaults.color = '#94a3b8';
-        Chart.defaults.borderColor = '#2a3447';
-
         // Vis dags dato med levende dansk format
         const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
         const todayStr = new Date().toLocaleDateString('da-DK', options);
         const formattedDate = todayStr.charAt(0).toUpperCase() + todayStr.slice(1);
         document.getElementById('dateText').textContent = formattedDate;
 
-        async function loadDashboardData() {
+        async function loadData() {
             try {
-                // Hent alle aktiviteter
                 const res = await fetch('/api/activities/all');
                 const activities = await res.json();
                 
@@ -120,7 +105,7 @@
                 listEl.innerHTML = '';
 
                 if (activities.length === 0) {
-                    listEl.innerHTML = '<div style="text-align:center; color: var(--garmin-text-muted);">Ingen aktiviteter fundet endnu.</div>';
+                    listEl.innerHTML = '<p style="color: var(--text-muted);">Ingen aktiviteter fundet.</p>';
                     return;
                 }
 
@@ -128,62 +113,25 @@
                     const d = new Date(act.date);
                     const dateFormatted = d.toLocaleDateString('da-DK', { day: 'numeric', month: 'short', year: 'numeric' });
                     const distKm = act.distance ? (act.distance / 1000).toFixed(2) + ' km' : '--';
-                    const paceMin = act.avg_pace_minutes ? formatPace(act.avg_pace_minutes) : '--';
-                    const hr = act.avg_hr ? act.avg_hr + ' bpm' : '--';
 
                     const item = document.createElement('a');
                     item.className = 'activity-item';
                     item.href = `/activity?date=${act.date.split('T')[0]}`;
                     item.innerHTML = `
                         <div>
-                            <div class="act-name">${act.title || 'Løbeaktivitet'}</div>
-                            <div class="act-details">${dateFormatted} • Puls: ${hr}</div>
+                            <strong>${act.title || 'Løbeaktivitet'}</strong>
+                            <div style="font-size: 0.8rem; color: var(--text-muted);">${dateFormatted}</div>
                         </div>
-                        <div class="act-stats">
-                            <div style="font-weight: bold; color: #fff;">${distKm}</div>
-                            <div class="act-details">${paceMin}</div>
-                        </div>
+                        <div style="text-align: right; font-weight: bold;">${distKm}</div>
                     `;
                     listEl.appendChild(item);
                 });
-
-                // Hent 30 dages pace data til grafen
-                const paceRes = await fetch('/api/running/pace-30days');
-                const paceData = await paceRes.json();
-
-                if (paceData.length > 0) {
-                    const ctx = document.getElementById('pace30Chart').getContext('2d');
-                    new Chart(ctx, {
-                        type: 'line',
-                        data: {
-                            labels: paceData.map(p => new Date(p.date).toLocaleDateString('da-DK', { day: 'numeric', month: 'short' })),
-                            datasets: [{
-                                label: 'Pace (min/km)',
-                                data: paceData.map(p => p.avg_pace_min_km),
-                                borderColor: '#fc4c02', backgroundColor: 'rgba(252, 76, 2, 0.1)',
-                                fill: true, tension: 0.3, borderWidth: 2, pointRadius: 4
-                            }]
-                        },
-                        options: {
-                            responsive: true, maintainAspectRatio: false,
-                            scales: { y: { reverse: true, ticks: { callback: v => formatPace(v) } } },
-                            plugins: { legend: { display: false } }
-                        }
-                    });
-                }
-
             } catch (e) {
-                console.error("Fejl ved indlæsning af dashboard:", e);
+                console.error(e);
             }
         }
 
-        function formatPace(m) {
-            if (!m) return '--';
-            const mins = Math.floor(m), secs = Math.round((m - mins) * 60);
-            return `${mins}:${secs.toString().padStart(2, '0')} /km`;
-        }
-
-        loadDashboardData();
+        loadData();
     </script>
 </body>
 </html>

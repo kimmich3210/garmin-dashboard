@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Aktivitetsdetaljer - Minut for Minut Puls & Pace</title>
+    <title>Aktivitetsdetaljer - Strava Athlete Intelligence</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         :root {
@@ -24,7 +24,7 @@
             background-color: var(--garmin-dark); color: var(--garmin-text);
             min-height: 100vh; padding: 20px;
         }
-        .container { max-width: 950px; margin: 0 auto; display: grid; gap: 20px; }
+        .container { max-width: 900px; margin: 0 auto; display: grid; gap: 20px; }
         .back-btn {
             display: inline-block; background: var(--garmin-border); color: #fff;
             padding: 8px 16px; border-radius: 4px; text-decoration: none; font-size: 0.9rem;
@@ -79,7 +79,7 @@
         .splits-table tr:last-child td { border-bottom: none; }
 
         /* Charts */
-        .chart-container { position: relative; height: 300px; width: 100%; margin-top: 15px; }
+        .chart-container { position: relative; height: 260px; width: 100%; margin-top: 15px; }
     </style>
 </head>
 <body>
@@ -89,7 +89,7 @@
         <div class="card" id="activityCard">
             <div class="strava-header">
                 <span class="strava-icon">STRAVA</span>
-                <span class="strava-title" id="actTitle">Indlæser minut-data...</span>
+                <span class="strava-title" id="actTitle">Indlæser træning...</span>
             </div>
             <div class="strava-meta" id="actMeta">Henter dato og sted...</div>
             
@@ -100,32 +100,20 @@
                 <div class="stat-box"><div class="label">Puls (Gns)</div><div class="value" id="actHr">--</div></div>
             </div>
 
-            <!-- AI KNAP -->
+            <!-- ATHLETE INTELLIGENCE KNAP -->
             <div class="ai-btn-container">
                 <button class="ai-btn" onclick="runAIAnalysis()">
-                    <span>✨</span> Strava Athlete Intelligence — Minut-Analyse
+                    <span>✨</span> Strava Athlete Intelligence — AI Analyse
                 </button>
                 <div class="ai-analysis-box" id="aiAnalysisBox">
-                    <h4><span>⚡</span> AI Træneranalyse (Minut for minut)</h4>
-                    <div id="aiContent">Analyserende...</div>
+                    <h4><span>⚡</span> AI Træneranalyse (Top til toe)</h4>
+                    <div id="aiContent">Henter ægte AI-analyse baseret på al din historik...</div>
                 </div>
             </div>
 
-            <!-- PULS GRAF MINUT FOR MINUT MED MAF 155 -->
-            <div style="margin-bottom: 30px;">
-                <div class="section-title">Puls (Polar Brystrem — Minut for minut med MAF-loft 155 bpm)</div>
-                <div class="chart-container"><canvas id="hrChart"></canvas></div>
-            </div>
-
-            <!-- PACE GRAF MED MÅLSTREG 5:00 -->
-            <div style="margin-bottom: 30px;">
-                <div class="section-title">Pace (Minut for minut med målstreg 5:00 min/km)</div>
-                <div class="chart-container"><canvas id="paceChart"></canvas></div>
-            </div>
-
             <!-- SPLITS TABEL -->
-            <div>
-                <div class="section-title">Kilometer Splits</div>
+            <div style="margin-bottom: 30px;">
+                <div class="section-title">Splits (Kilometer for kilometer)</div>
                 <table class="splits-table">
                     <thead>
                         <tr>
@@ -138,6 +126,18 @@
                         <tr><td colspan="3" style="text-align:center; color:var(--garmin-text-muted);">Henter splits...</td></tr>
                     </tbody>
                 </table>
+            </div>
+
+            <!-- PULS GRAF MED MAF STREG -->
+            <div style="margin-bottom: 30px;">
+                <div class="section-title">Puls (Kilometer-overblik med MAF-loft 155 bpm)</div>
+                <div class="chart-container"><canvas id="hrChart"></canvas></div>
+            </div>
+
+            <!-- PACE GRAF MED MÅLSTREG -->
+            <div>
+                <div class="section-title">Pace (Kilometer-overblik med målstreg på 5:00 min/km)</div>
+                <div class="chart-container"><canvas id="paceChart"></canvas></div>
             </div>
         </div>
     </div>
@@ -164,70 +164,79 @@
             }
 
             try {
-                const res = await fetch(`/api/activity/details/${dateStr}`);
+                const res = await fetch(`/api/activity/${dateStr}`);
                 if (!res.ok) throw new Error('Kunne ikke finde aktivitet');
                 const data = await res.json();
-                const act = data.activity;
 
-                document.getElementById('actTitle').textContent = act.title || 'Løbeaktivitet';
-                const d = new Date(act.date);
+                document.getElementById('actTitle').textContent = data.title || 'Løbeaktivitet';
+                const d = new Date(data.date);
                 document.getElementById('actMeta').textContent = `${d.toLocaleString('da-DK')} • Kim Brian Enhaynes Lungay • Vallensbæk`;
 
-                const distNum = act.distance ? (act.distance / 1000) : 0;
+                const distNum = data.distance ? (data.distance / 1000) : 0;
                 document.getElementById('actDist').textContent = distNum.toFixed(2) + ' km';
-                document.getElementById('actTime').textContent = act.duration_minutes ? Math.floor(act.duration_minutes) + ' min' : '--';
-                document.getElementById('actPace').textContent = formatPace(act.avg_pace_minutes);
-                document.getElementById('actHr').textContent = (act.avg_hr || '--') + ' bpm';
+                document.getElementById('actTime').textContent = data.duration_minutes ? Math.floor(data.duration_minutes) + ' min' : '--';
+                document.getElementById('actPace').textContent = formatPace(data.avg_pace_minutes);
+                document.getElementById('actHr').textContent = (data.avg_hr || '--') + ' bpm';
 
-                // --- PULS GRAF MINUT FOR MINUT (MED MAF 155 STREG) ---
+                // Generér præcise splits
+                let generatedSplits = data.splits && data.splits.length > 0 ? data.splits : generateDynamicSplits(distNum, data.avg_pace_minutes, data.avg_hr);
+                
+                const tbody = document.getElementById('splitsTableBody');
+                tbody.innerHTML = '';
+                generatedSplits.forEach(s => {
+                    tbody.innerHTML += `<tr><td><strong>${s.km}</strong></td><td>${s.pace} /km</td><td>${s.hr} bpm</td></tr>`;
+                });
+
+                // --- PULS GRAF MED MAF STREG PÅ 155 ---
                 const hrCtx = document.getElementById('hrChart').getContext('2d');
-                let mafLine = new Array(data.minutes.length).fill(155);
+                let hrValues = generatedSplits.map(s => s.hr);
+                let mafLineData = new Array(generatedSplits.length).fill(155);
 
                 new Chart(hrCtx, {
                     type: 'line',
                     data: {
-                        labels: data.minutes,
+                        labels: generatedSplits.map(s => `Km ${s.km}`),
                         datasets: [
                             {
-                                label: 'Polar Brystrem Puls (bpm)',
-                                data: data.hr_stream,
-                                borderColor: '#ef4444', backgroundColor: 'rgba(239, 68, 68, 0.15)',
-                                fill: true, tension: 0.2, borderWidth: 2, pointRadius: 0
+                                label: 'Gns. Puls (bpm)',
+                                data: hrValues,
+                                borderColor: '#ef4444', backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                                fill: true, tension: 0.2, borderWidth: 2, pointRadius: 4
                             },
                             {
                                 label: 'MAF Loft (155 bpm)',
-                                data: mafLine,
-                                borderColor: '#eab308', borderDash: [6, 6],
+                                data: mafLineData,
+                                borderColor: '#eab308', borderDash: [5, 5],
                                 borderWidth: 2, pointRadius: 0, fill: false
                             }
                         ]
                     },
-                    options: {
-                        responsive: true, maintainAspectRatio: false,
-                        scales: { y: { min: 80, max: 190 } },
-                        plugins: { legend: { display: true } }
-                    }
+                    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: true } } }
                 });
 
-                // --- PACE GRAF MINUT FOR MINUT (MED MÅLSTREG 5:00) ---
+                // --- PACE GRAF MED MÅLSTREG PÅ 5:00 ---
                 const paceCtx = document.getElementById('paceChart').getContext('2d');
-                let targetPaceLine = new Array(data.minutes.length).fill(5.0);
+                let paceValues = generatedSplits.map(s => {
+                    let parts = s.pace.split(':');
+                    return parseInt(parts[0]) + (parseInt(parts[1]) / 60);
+                });
+                let targetPaceLine = new Array(generatedSplits.length).fill(5.0);
 
                 new Chart(paceCtx, {
                     type: 'line',
                     data: {
-                        labels: data.minutes,
+                        labels: generatedSplits.map(s => `Km ${s.km}`),
                         datasets: [
                             {
                                 label: 'Pace (min/km)',
-                                data: data.pace_stream,
-                                borderColor: '#fc4c02', backgroundColor: 'rgba(252, 76, 2, 0.15)',
-                                fill: true, tension: 0.2, borderWidth: 2, pointRadius: 0
+                                data: paceValues,
+                                borderColor: '#fc4c02', backgroundColor: 'rgba(252, 76, 2, 0.1)',
+                                fill: true, tension: 0.2, borderWidth: 2, pointRadius: 4
                             },
                             {
                                 label: 'Mål Pace (5:00 /km)',
                                 data: targetPaceLine,
-                                borderColor: '#22c55e', borderDash: [6, 6],
+                                borderColor: '#22c55e', borderDash: [5, 5],
                                 borderWidth: 2, pointRadius: 0, fill: false
                             }
                         ]
@@ -237,14 +246,6 @@
                         scales: { y: { reverse: true, ticks: { callback: v => formatPace(v) } } },
                         plugins: { legend: { display: true } }
                     }
-                });
-
-                // Generér splits tabel
-                let generatedSplits = act.splits && act.splits.length > 0 ? act.splits : generateDynamicSplits(distNum, act.avg_pace_minutes, act.avg_hr);
-                const tbody = document.getElementById('splitsTableBody');
-                tbody.innerHTML = '';
-                generatedSplits.forEach(s => {
-                    tbody.innerHTML += `<tr><td><strong>${s.km}</strong></td><td>${s.pace} /km</td><td>${s.hr} bpm</td></tr>`;
                 });
 
             } catch (e) {
