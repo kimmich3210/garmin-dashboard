@@ -82,7 +82,7 @@ class GarminSync:
 
             for a in batch:
                 norm = self._normalize_activity(a)
-                if norm["distance"] > 0: # Inkluder alt med distance
+                if norm["distance"] > 0:
                     try:
                         act_date = datetime.strptime(norm["date"].split("T")[0], "%Y-%m-%d")
                         if act_date >= maf_start_date:
@@ -145,7 +145,7 @@ class GarminSync:
         except:
             pass
 
-        # 1. Hent absolut seneste aktivitet fra databasen uanset type
+        # Hent seneste aktivitet fra databasen
         recent_run_penalty = 0
         last_run_text = "Ingen løb fundet"
         try:
@@ -163,7 +163,6 @@ class GarminSync:
                 run_date_str = row["date"].split("T")[0]
                 run_date = datetime.strptime(run_date_str, "%Y-%m-%d")
                 
-                # Beregn forskel i dage uafhængigt af tidszone
                 today_date = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
                 run_date_clean = run_date.replace(hour=0, minute=0, second=0, microsecond=0)
                 days_ago = (today_date - run_date_clean).days
@@ -182,7 +181,7 @@ class GarminSync:
         except Exception as e:
             logger.error(f"Fejl ved hentning af seneste løb: {e}")
 
-        # 2. Basis beregning ud fra Søvnscore og Body Battery
+        # Basis beregning ud fra Søvnscore og Body Battery
         score_parts = []
         if sleep_score is not None: score_parts.append(sleep_score * 0.5)
         if body_battery is not None: score_parts.append(body_battery * 0.5)
@@ -192,20 +191,16 @@ class GarminSync:
         else:
             score = 75
 
-        # 3. Træk fra for træningsbelastning
         score -= recent_run_penalty
 
-        # 4. Justeringer for HRV-status
         if hrv_status == 'UNBALANCED': 
             score -= 12
         elif hrv_status == 'BALANCED':
             score += 5
 
-        # 5. Justeringer for hvilepuls
         if rhr and rhr > 60: 
             score -= 8
 
-        # 6. Justeringer for døgnets gennemsnitlige stressniveau
         stress_text = "Stress: Ikke tilgængelig"
         if stress_avg is not None:
             stress_text = f"Stress: {stress_avg}"
@@ -219,7 +214,6 @@ class GarminSync:
         score = max(1, min(100, score))
         status = "Høj" if score >= 70 else ("Moderat" if score >= 45 else "Lav")
         
-        # Saml beskrivelsen til dashboardet
         desc_parts = []
         if body_battery is not None: desc_parts.append(f"BB: {body_battery}")
         if sleep_score is not None: desc_parts.append(f"Søvn: {sleep_score}/100")
