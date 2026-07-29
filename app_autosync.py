@@ -145,11 +145,9 @@ class GarminSync:
         except:
             pass
 
-        # Hent seneste aktivitet fra databasen (og direkte fra Garmin API som fallback)
+        # Hent seneste aktivitet fra databasen
         recent_run_penalty = 0
         last_run_text = "Ingen løb fundet"
-        latest_act = None
-
         try:
             conn = sqlite3.connect(DB_PATH)
             conn.row_factory = sqlite3.Row
@@ -162,29 +160,14 @@ class GarminSync:
             conn.close()
 
             if row:
-                latest_act = {"date": row["date"], "distance": row["distance"]}
-        except:
-            pass
-
-        # Fallback direkte til Garmin API hvis databasen er tom
-        if not latest_act and self.client:
-            try:
-                batch = self.client.get_activities(0, 1)
-                if batch:
-                    latest_act = {"date": batch[0].get("startTimeLocal"), "distance": batch[0].get("distance", 0)}
-            except:
-                pass
-
-        if latest_act:
-            try:
-                run_date_str = latest_act["date"].split("T")[0]
+                run_date_str = row["date"].split("T")[0]
                 run_date = datetime.strptime(run_date_str, "%Y-%m-%d")
                 
                 today_date = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
                 run_date_clean = run_date.replace(hour=0, minute=0, second=0, microsecond=0)
                 days_ago = (today_date - run_date_clean).days
                 
-                dist_km = (latest_act["distance"] or 0) / 1000
+                dist_km = (row["distance"] or 0) / 1000
                 
                 if days_ago == 0:
                     recent_run_penalty = int(dist_km * 1.5)
@@ -195,8 +178,8 @@ class GarminSync:
                 else:
                     recent_run_penalty = max(0, int(dist_km * (0.5 / max(1, days_ago))))
                     last_run_text = f"Sidste løb: For {days_ago} dage siden ({dist_km:.1f} km)"
-            except Exception as e:
-                logger.error(f"Fejl ved behandling af seneste løb: {e}")
+        except Exception as e:
+            logger.error(f"Fejl ved hentning af seneste løb: {e}")
 
         # Basis beregning ud fra Søvnscore og Body Battery
         score_parts = []
