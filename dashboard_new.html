@@ -90,6 +90,19 @@
             border: 3px solid var(--garmin-cyan); font-weight: bold; font-size: 1rem; color: #fff;
         }
 
+        /* Styrketræning Genvej */
+        .quick-strength-bar {
+            background-color: var(--garmin-card); border-radius: 8px; padding: 12px 15px;
+            border: 1px solid var(--garmin-border); display: flex; justify-content: space-between; align-items: center;
+        }
+        .quick-strength-bar span { font-size: 0.85rem; font-weight: 600; color: #fff; }
+        .strength-btn {
+            background-color: var(--garmin-green); color: #12161f; border: none;
+            padding: 8px 14px; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 0.8rem;
+            transition: opacity 0.2s;
+        }
+        .strength-btn:hover { opacity: 0.9; }
+
         /* Calendar Section */
         .calendar-card {
             background-color: var(--garmin-card); border-radius: 8px; padding: 15px;
@@ -112,13 +125,20 @@
         .cal-cell:hover { border-color: var(--garmin-cyan); }
         
         .cal-cell.is-running { border-left: 3px solid var(--garmin-red); background: rgba(239, 68, 68, 0.08); }
+        .cal-cell.is-strength { border-left: 3px solid var(--garmin-green); background: rgba(34, 197, 94, 0.08); }
         .cal-date { font-size: 0.7rem; color: var(--garmin-text-muted); text-align: left; }
         
         .cal-activity-badge.running {
             font-size: 0.55rem; background: rgba(239, 68, 68, 0.2); color: var(--garmin-red);
             padding: 2px 3px; border-radius: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left;
         }
-        @media (min-width: 600px) { .cal-activity-badge.running { font-size: 0.65rem; padding: 2px 4px; } }
+        .cal-activity-badge.strength {
+            font-size: 0.55rem; background: rgba(34, 197, 94, 0.2); color: var(--garmin-green);
+            padding: 2px 3px; border-radius: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left;
+        }
+        @media (min-width: 600px) { 
+            .cal-activity-badge.running, .cal-activity-badge.strength { font-size: 0.65rem; padding: 2px 4px; } 
+        }
 
         /* POP-UP MODAL */
         .modal-overlay {
@@ -148,6 +168,7 @@
         .strava-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; padding-right: 30px; }
         .strava-title-group { display: flex; align-items: center; gap: 8px; }
         .strava-icon { background: var(--garmin-red); color: #fff; font-weight: bold; padding: 3px 6px; border-radius: 4px; font-size: 0.75rem; }
+        .strava-icon.strength { background: var(--garmin-green); color: #12161f; }
         .strava-title { font-size: 1rem; font-weight: bold; color: #fff; }
         .strava-meta { font-size: 0.75rem; color: var(--garmin-text-muted); margin-bottom: 15px; }
         .strava-stats-grid {
@@ -160,6 +181,7 @@
             display: block; text-align: center; background: var(--garmin-red); color: #fff; text-decoration: none;
             padding: 10px; border-radius: 4px; font-size: 0.85rem; font-weight: bold;
         }
+        .view-details-btn.strength { background: var(--garmin-green); color: #12161f; }
 
         /* Controls */
         .controls {
@@ -219,6 +241,12 @@
             <div class="readiness-circle-badge" id="readinessBadge">--%</div>
         </div>
 
+        <!-- HURTIG TILFØJ STYRKETRÆNING -->
+        <div class="quick-strength-bar">
+          <span>🏋️ Styrketræning i dag?</span>
+          <button class="strength-btn" onclick="addQuickStrength()">+ Tilføj styrketræning</button>
+        </div>
+
         <!-- Månedlig Kalender -->
         <div class="calendar-card">
             <div class="calendar-header">
@@ -257,12 +285,12 @@
             <button class="modal-close-btn" onclick="closeModal()">✕</button>
             <div class="strava-header">
                 <div class="strava-title-group">
-                    <span class="strava-icon">LØB</span>
+                    <span class="strava-icon" id="modalIconBadge">LØB</span>
                     <span class="strava-title" id="modalTitle">Aktivitet</span>
                 </div>
             </div>
             <div class="strava-meta" id="modalMeta">Dato og tidspunkt</div>
-            <div class="strava-stats-grid">
+            <div class="strava-stats-grid" id="modalStatsGrid">
                 <div class="stat-box"><div class="label">DISTANCE</div><div class="value" id="modalDist">-- km</div></div>
                 <div class="stat-box"><div class="label">TID</div><div class="value" id="modalTime">--:--</div></div>
                 <div class="stat-box"><div class="label">PACE</div><div class="value" id="modalPace">-- min/km</div></div>
@@ -296,6 +324,10 @@
             const mafStartDate = new Date('2026-07-13T00:00:00');
 
             sorted.forEach(act => {
+                if (act.activity_type === 'strength') {
+                    act.displayTitle = 'Styrketræning';
+                    return;
+                }
                 const actDate = new Date(act.date);
                 if (actDate >= mafStartDate) {
                     act.displayTitle = `MAF ${mafCount}`;
@@ -322,6 +354,11 @@
             try {
                 const res = await fetch('/api/activities/all');
                 let rawActivities = await res.json();
+                
+                // Hent lokale styrketræninger fra browserens hukommelse (localStorage)
+                const localStrength = JSON.parse(localStorage.getItem('strength_workouts') || '[]');
+                rawActivities = [...rawActivities, ...localStrength];
+
                 cachedActivities = processMafTitles(rawActivities);
                 
                 const now = new Date();
@@ -361,8 +398,13 @@
 
                     if (dayActivities.length > 0) {
                         const act = dayActivities[0];
-                        cellClass = 'is-running';
-                        badgeHtml = `<div class="cal-activity-badge running">${act.displayTitle}</div>`;
+                        if (act.activity_type === 'strength') {
+                            cellClass = 'is-strength';
+                            badgeHtml = `<div class="cal-activity-badge strength">Styrke</div>`;
+                        } else {
+                            cellClass = 'is-running';
+                            badgeHtml = `<div class="cal-activity-badge running">${act.displayTitle}</div>`;
+                        }
                     }
 
                     grid.innerHTML += `
@@ -375,6 +417,29 @@
             } catch (e) { console.error('Fejl ved indlæsning af kalender', e); }
         }
 
+        function addQuickStrength() {
+            const now = new Date();
+            const dateStr = now.toISOString(); // Automatisk dagens dato og tid
+            
+            const newStrength = {
+                activity_id: 'strength_' + Date.now(),
+                activity_type: 'strength',
+                date: dateStr,
+                title: 'Styrketræning',
+                distance: 0,
+                duration_minutes: 45,
+                avg_hr: 120,
+                displayTitle: 'Styrketræning'
+            };
+
+            let localStrength = JSON.parse(localStorage.getItem('strength_workouts') || '[]');
+            localStrength.push(newStrength);
+            localStorage.setItem('strength_workouts', JSON.stringify(localStrength));
+
+            alert('Styrketræning tilføjet for i dag!');
+            loadCalendar();
+        }
+
         function openActivityModal(dateStr) {
             const match = cachedActivities.find(a => {
                 if (!a.date) return false;
@@ -385,18 +450,35 @@
 
             if (!match) return;
 
-            document.getElementById('modalTitle').textContent = match.displayTitle;
             const d = new Date(match.date);
+            document.getElementById('modalTitle').textContent = match.displayTitle;
             document.getElementById('modalMeta').textContent = `${d.toLocaleString('da-DK')} • Vallensbæk`;
-            
-            const distKm = match.distance ? (match.distance / 1000).toFixed(2) + ' km' : '-- km';
-            const durationMin = match.duration_minutes ? Math.floor(match.duration_minutes) + ' min' : '--';
-            document.getElementById('modalDist').textContent = distKm;
-            document.getElementById('modalTime').textContent = durationMin;
-            document.getElementById('modalPace').textContent = formatPace(match.avg_pace_minutes) + ' min/km';
-            document.getElementById('modalHr').textContent = (match.avg_hr || '--') + ' bpm';
 
-            document.getElementById('modalLinkBtn').href = `/activity?date=${dateStr}`;
+            const iconBadge = document.getElementById('modalIconBadge');
+            const linkBtn = document.getElementById('modalLinkBtn');
+            const statsGrid = document.getElementById('modalStatsGrid');
+
+            if (match.activity_type === 'strength') {
+                iconBadge.className = 'strava-icon strength';
+                iconBadge.textContent = 'STYRKE';
+                statsGrid.innerHTML = `
+                    <div class="stat-box"><div class="label">TYPE</div><div class="value">Styrke</div></div>
+                    <div class="stat-box"><div class="label">TID</div><div class="value">45 min</div></div>
+                `;
+                linkBtn.style.display = 'none';
+            } else {
+                iconBadge.className = 'strava-icon';
+                iconBadge.textContent = 'LØB';
+                statsGrid.innerHTML = `
+                    <div class="stat-box"><div class="label">DISTANCE</div><div class="value">${match.distance ? (match.distance / 1000).toFixed(2) + ' km' : '-- km'}</div></div>
+                    <div class="stat-box"><div class="label">TID</div><div class="value">${match.duration_minutes ? Math.floor(match.duration_minutes) + ' min' : '--'}</div></div>
+                    <div class="stat-box"><div class="label">PACE</div><div class="value">${formatPace(match.avg_pace_minutes)} min/km</div></div>
+                    <div class="stat-box"><div class="label">PULS</div><div class="value">${match.avg_hr || '--'} bpm</div></div>
+                `;
+                linkBtn.style.display = 'block';
+                linkBtn.href = `/activity?date=${dateStr}`;
+            }
+
             document.getElementById('activityModal').classList.add('active');
         }
 
@@ -449,7 +531,6 @@
                 const mafStartDate = new Date('2026-07-13T00:00:00');
                 let filteredData = processed.filter(d => new Date(d.date) >= mafStartDate);
 
-                // Filtrer til løb inden for de sidste 30 dage
                 const thirtyDaysAgo = new Date();
                 thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
                 filteredData = filteredData.filter(d => new Date(d.date) >= thirtyDaysAgo);
