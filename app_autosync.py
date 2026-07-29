@@ -380,6 +380,21 @@ async def get_running_pace_30days():
     conn.close()
     return [dict(row) for row in rows]
 
+# Ny MAF-specifik API rute til analyse af puls og tempo over tid
+@app.get("/api/maf/progress")
+async def get_maf_progress():
+    conn = get_db_connection()
+    rows = conn.execute("""
+        SELECT date, title, distance, avg_pace_minutes as avg_pace, avg_hr
+        FROM activities
+        WHERE activity_type IN ('running', 'treadmill_running', 'track_running')
+          AND date >= '2026-07-13'
+          AND avg_pace_minutes > 0
+        ORDER BY date ASC
+    """).fetchall()
+    conn.close()
+    return [dict(row) for row in rows]
+
 @app.get("/api/training/readiness")
 async def get_training_readiness():
     return garmin_sync.fetch_training_readiness_comprehensive()
@@ -429,6 +444,15 @@ async def save_strength(data: dict):
     conn.commit()
     conn.close()
     return {"message": "Styrketræning gemt succesfuldt på serveren"}
+
+@app.delete("/api/strength/delete/{date_str}")
+async def delete_strength(date_str: str):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM strength_workouts WHERE date LIKE ?", (f"{date_str}%",))
+    conn.commit()
+    conn.close()
+    return {"message": "Styrketræning slettet succesfuldt"}
 
 @app.get("/api/activity/{date_str}")
 async def get_activity_by_date(date_str: str):

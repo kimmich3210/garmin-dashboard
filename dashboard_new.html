@@ -254,6 +254,12 @@
             <div class="calendar-grid" id="calendarGrid"></div>
         </div>
 
+        <!-- NY MAF FREMGANGS-GRAF -->
+        <div class="card">
+            <div class="card-header"><h3>MAF FREMGANG (TEMPO & PULS FRA 13. JULI)</h3></div>
+            <div class="chart-wrapper"><canvas id="mafProgressChart"></canvas></div>
+        </div>
+
         <div class="controls">
             <div class="sync-status">
                 <div class="sync-indicator" id="syncIndicator"></div>
@@ -266,7 +272,7 @@
         </div>
 
         <div class="card">
-            <div class="card-header"><h3>LØBE-PACE (HVER 30 DAG / MAF FRA 13. JULI)</h3></div>
+            <div class="card-header"><h3>LØBE-PACE (SIDSTE 30 DAGE)</h3></div>
             <div class="chart-wrapper"><canvas id="pace30Chart"></canvas></div>
         </div>
 
@@ -299,7 +305,7 @@
         Chart.defaults.borderColor = '#2a3447';
         Chart.defaults.font.family = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
 
-        let rhrChart, pace30Chart;
+        let rhrChart, pace30Chart, mafProgressChart;
         let cachedActivities = [];
 
         const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
@@ -574,6 +580,90 @@
             }
         }
 
+        // MAF Fremgangs Graf
+        async function loadMAFProgressChart() {
+            try {
+                const res = await fetch('/api/maf/progress');
+                let rawData = await res.json();
+                let processed = processMafTitles(rawData);
+
+                const ctx = document.getElementById('mafProgressChart').getContext('2d');
+                if (mafProgressChart) mafProgressChart.destroy();
+                
+                mafProgressChart = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: processed.map(d => d.displayTitle),
+                        datasets: [
+                            {
+                                label: 'Pace (min/km)',
+                                data: processed.map(d => d.avg_pace),
+                                borderColor: '#00c1d6', 
+                                backgroundColor: 'rgba(0, 193, 214, 0.1)',
+                                fill: false, 
+                                tension: 0.3,
+                                borderWidth: 3, 
+                                pointRadius: 5, 
+                                pointBackgroundColor: '#00c1d6',
+                                yAxisID: 'y'
+                            },
+                            {
+                                label: 'Gns. Puls (bpm)',
+                                data: processed.map(d => d.avg_hr),
+                                borderColor: '#ef4444', 
+                                backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                                fill: false, 
+                                tension: 0.3,
+                                borderWidth: 2, 
+                                pointRadius: 4, 
+                                pointBackgroundColor: '#ef4444',
+                                yAxisID: 'y1'
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true, 
+                        maintainAspectRatio: false,
+                        scales: {
+                            y: { 
+                                type: 'linear',
+                                display: true,
+                                position: 'left',
+                                reverse: true, 
+                                grid: { color: '#2a3447' }, 
+                                title: { display: true, text: 'Pace (min/km)', color: '#00c1d6' },
+                                ticks: { callback: v => formatPace(v), font: { size: 10 } } 
+                            },
+                            y1: {
+                                type: 'linear',
+                                display: true,
+                                position: 'right',
+                                grid: { drawOnChartArea: false },
+                                title: { display: true, text: 'Puls (bpm)', color: '#ef4444' },
+                                ticks: { font: { size: 10 } }
+                            },
+                            x: { 
+                                grid: { display: false },
+                                ticks: { color: '#e2e8f0', font: { weight: 'bold', size: 10 } }
+                            }
+                        },
+                        plugins: { 
+                            legend: { display: true, labels: { color: '#e2e8f0', font: { size: 10 } } },
+                            tooltip: {
+                                callbacks: {
+                                    title: (items) => items[0].label,
+                                    label: (item) => {
+                                        if (item.datasetIndex === 0) return ` Pace: ${formatPace(item.raw)} min/km`;
+                                        return ` Puls: ${item.raw} bpm`;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+            } catch (e) { console.error(e); }
+        }
+
         async function loadPace30Chart() {
             try {
                 const res = await fetch('/api/running/pace-30days');
@@ -670,6 +760,7 @@
                 loadReadiness(),
                 loadCalendar(),
                 loadSyncStatus(),
+                loadMAFProgressChart(),
                 loadPace30Chart(),
                 loadRHRChart()
             ]);
