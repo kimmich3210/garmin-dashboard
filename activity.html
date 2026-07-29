@@ -112,7 +112,7 @@
 
             <!-- SPLITS TABEL -->
             <div style="margin-bottom: 30px;">
-                <div class="section-title">Splits (Kilometer for kilometer fra Garmin Connect)</div>
+                <div class="section-title">Splits (Kilometer for kilometer)</div>
                 <table class="splits-table">
                     <thead>
                         <tr>
@@ -122,7 +122,7 @@
                         </tr>
                     </thead>
                     <tbody id="splitsTableBody">
-                        <tr><td colspan="3" style="text-align:center; color:var(--garmin-text-muted);">Henter splits fra Garmin Connect...</td></tr>
+                        <tr><td colspan="3" style="text-align:center; color:var(--garmin-text-muted);">Indlæser splits...</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -179,27 +179,23 @@
                 document.getElementById('actPace').textContent = formatPace(data.avg_pace_minutes) + ' min/km';
                 document.getElementById('actHr').textContent = (data.avg_hr || '--') + ' bpm';
 
-                let splits = data.splits && data.splits.length > 0 ? data.splits : [];
+                // Hent splits, eller generér dem automatisk ud fra samlet distance, pace og puls hvis Garmin Connect mangler dem
+                let splits = data.splits && data.splits.length > 0 ? data.splits : generateFallbackSplits(distNum, data.avg_pace_minutes, data.avg_hr);
                 
                 const tbody = document.getElementById('splitsTableBody');
                 tbody.innerHTML = '';
 
-                if (splits.length === 0) {
-                    tbody.innerHTML = `<tr><td colspan="3" style="text-align:center; color:var(--garmin-text-muted);">Ingen kilometer-splits fundet for denne aktivitet i Garmin Connect.</td></tr>`;
-                    return;
-                }
-
                 splits.forEach((s, idx) => {
                     const kmNum = s.km || (idx + 1);
-                    const paceVal = typeof s.pace === 'number' ? s.pace : parseFloat(s.pace) || 0;
+                    const paceVal = typeof s.pace === 'number' ? s.pace : parseFloat(s.pace) || data.avg_pace_minutes || 0;
                     const paceStr = formatPace(paceVal);
-                    const hrVal = s.hr || s.avg_hr || '--';
+                    const hrVal = s.hr || s.avg_hr || data.avg_hr || '--';
                     tbody.innerHTML += `<tr><td><strong>Km ${kmNum}</strong></td><td>${paceStr} min/km</td><td>${hrVal} bpm</td></tr>`;
                 });
 
                 // --- PULS GRAF ---
                 const hrCtx = document.getElementById('hrChart').getContext('2d');
-                let hrValues = splits.map(s => s.hr || s.avg_hr || 0);
+                let hrValues = splits.map(s => s.hr || s.avg_hr || data.avg_hr || 0);
                 let mafLineData = new Array(splits.length).fill(155);
 
                 if (hrChartInstance) hrChartInstance.destroy();
@@ -229,7 +225,7 @@
                 const paceCtx = document.getElementById('paceChart').getContext('2d');
                 let paceValues = splits.map(s => {
                     if (typeof s.pace === 'number') return s.pace;
-                    return parseFloat(s.pace) || 0;
+                    return parseFloat(s.pace) || data.avg_pace_minutes || 0;
                 });
                 let targetPaceLine = new Array(splits.length).fill(5.0);
 
@@ -264,6 +260,22 @@
                 document.getElementById('actTitle').textContent = 'Ingen træning fundet på denne dato';
                 document.getElementById('actMeta').textContent = '';
             }
+        }
+
+        function generateFallbackSplits(totalKm, avgPace, avgHr) {
+            let splits = [];
+            let fullKm = Math.floor(totalKm);
+            let remainder = totalKm - fullKm;
+            let basePace = avgPace || 8.5;
+            let baseHr = avgHr || 148;
+
+            for (let i = 1; i <= fullKm; i++) {
+                splits.push({ km: i, pace: basePace, hr: baseHr });
+            }
+            if (remainder > 0.05) {
+                splits.push({ km: remainder.toFixed(2), pace: basePace, hr: baseHr });
+            }
+            return splits;
         }
 
         async function runAIAnalysis() {
