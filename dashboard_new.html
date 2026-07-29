@@ -12,7 +12,7 @@
             background: #121212; color: #e0e0e0; min-height: 100vh; padding: 20px;
         }
         .header { text-align: center; margin-bottom: 30px; padding: 10px; }
-        .header h1 { font-size: 2.2rem; color: #fc4c02; /* Strava Orange */ margin-bottom: 8px; }
+        .header h1 { font-size: 2.2rem; color: #fc4c02; margin-bottom: 8px; }
         .header p { color: #888; font-size: 0.95rem; }
 
         .controls {
@@ -33,23 +33,6 @@
         }
         .sync-btn:hover { background: #e34402; }
         .sync-btn:disabled { background: #555; cursor: not-allowed; }
-
-        /* Strava-inspired Feed / Feedback Box */
-        .feedback-card {
-            max-width: 900px; margin: 0 auto 30px; background: #1e1e1e;
-            border-left: 4px solid #fc4c02; border-radius: 8px; padding: 20px 25px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.3); border-top: 1px solid #2a2a2a; border-right: 1px solid #2a2a2a; border-bottom: 1px solid #2a2a2a;
-        }
-        .feedback-card h3 { color: #fff; margin-bottom: 12px; font-size: 1.1rem; display: flex; align-items: center; gap: 8px; }
-        .feedback-summary { font-size: 1rem; color: #f1f5f9; line-height: 1.6; margin-bottom: 15px; }
-        
-        .feedback-grid {
-            display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; margin-top: 15px;
-        }
-        .feedback-item {
-            background: #252525; padding: 12px 15px; border-radius: 6px; border: 1px solid #333;
-            font-size: 0.9rem; color: #ccc; line-height: 1.4;
-        }
 
         .section { margin-bottom: 40px; max-width: 900px; margin-left: auto; margin-right: auto; }
         .chart-container {
@@ -75,13 +58,6 @@
             </div>
         </div>
         <button class="sync-btn" id="syncBtn" onclick="triggerSync()">Synkroniser nu</button>
-    </div>
-
-    <!-- Strava-style Feedback Card -->
-    <div class="feedback-card" id="feedbackContainer">
-        <h3>🏆 Automatisk Træner-Analyse (Sidste 30 Dage)</h3>
-        <div class="feedback-summary" id="feedbackSummary">Henter data...</div>
-        <div class="feedback-grid" id="feedbackDetailsGrid"></div>
     </div>
 
     <!-- Charts Section -->
@@ -133,19 +109,6 @@
                 }
             } catch (e) {
                 console.error('Fejl ved indlæsning af sync-status', e);
-            }
-        }
-
-        async function loadFeedback() {
-            try {
-                const res = await fetch('/api/running/feedback');
-                const data = await res.json();
-                document.getElementById('feedbackSummary').innerHTML = data.summary;
-                
-                const grid = document.getElementById('feedbackDetailsGrid');
-                grid.innerHTML = data.details.map(d => `<div class="feedback-item">${d}</div>`).join('');
-            } catch (e) {
-                console.error('Fejl ved indlæsning af feedback', e);
             }
         }
 
@@ -252,7 +215,6 @@
         async function loadAllData() {
             await Promise.all([
                 loadSyncStatus(),
-                loadFeedback(),
                 loadPace30Chart(),
                 loadRHRChart()
             ]);
