@@ -254,10 +254,16 @@
             <div class="calendar-grid" id="calendarGrid"></div>
         </div>
 
-        <!-- NY MAF FREMGANGS-GRAF -->
+        <!-- MAF FREMGANGS-GRAF -->
         <div class="card">
             <div class="card-header"><h3>MAF FREMGANG (TEMPO & PULS FRA 13. JULI)</h3></div>
             <div class="chart-wrapper"><canvas id="mafProgressChart"></canvas></div>
+        </div>
+
+        <!-- HRV 14 DAGE GRAF (Afløser gammel løbegraf) -->
+        <div class="card">
+            <div class="card-header"><h3>HRV / HJERTERYTMEVARIABILITET (SIDSTE 14 DAGE)</h3></div>
+            <div class="chart-wrapper"><canvas id="hrvChart"></canvas></div>
         </div>
 
         <div class="controls">
@@ -269,11 +275,6 @@
                 </div>
             </div>
             <button class="sync-btn" id="syncBtn" onclick="triggerSync()">Synkroniser nu</button>
-        </div>
-
-        <div class="card">
-            <div class="card-header"><h3>LØBE-PACE (SIDSTE 30 DAGE)</h3></div>
-            <div class="chart-wrapper"><canvas id="pace30Chart"></canvas></div>
         </div>
 
         <div class="card">
@@ -305,7 +306,7 @@
         Chart.defaults.borderColor = '#2a3447';
         Chart.defaults.font.family = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
 
-        let rhrChart, pace30Chart, mafProgressChart;
+        let rhrChart, hrvChart, mafProgressChart;
         let cachedActivities = [];
 
         const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
@@ -350,14 +351,28 @@
             } catch (e) { console.error(e); }
         }
 
+        function getLocalStrengthWorkouts() {
+            try {
+                const data = localStorage.getItem('garmin_strength_workouts');
+                return data ? JSON.parse(data) : [];
+            } catch (e) {
+                return [];
+            }
+        }
+
+        function saveLocalStrengthWorkouts(workouts) {
+            try {
+                localStorage.setItem('garmin_strength_workouts', JSON.stringify(workouts));
+            } catch (e) {
+                console.error(e);
+            }
+        }
+
         async function loadCalendar() {
             try {
-                const [resActs, resStrength] = await Promise.all([
-                    fetch('/api/activities/all'),
-                    fetch('/api/strength/all')
-                ]);
+                const resActs = await fetch('/api/activities/all');
                 let rawActivities = await resActs.json();
-                let rawStrength = await resStrength.json();
+                let rawStrength = getLocalStrengthWorkouts();
 
                 const formattedStrength = rawStrength.map(s => ({
                     activity_id: s.activity_id,
@@ -426,48 +441,37 @@
             } catch (e) { console.error('Fejl ved indlæsning af kalender', e); }
         }
 
-        async function saveStrengthFromModal(dateStr) {
+        function saveStrengthFromModal(dateStr) {
             const ex1 = document.getElementById('modalEx1').value || '3x10';
             const ex2 = document.getElementById('modalEx2').value || '3x12';
             const ex3 = document.getElementById('modalEx3').value || '3x12';
             const ex4 = document.getElementById('modalEx4').value || '3x10';
 
-            const payload = {
+            let workouts = getLocalStrengthWorkouts();
+            workouts = workouts.filter(w => !w.date.startsWith(dateStr));
+
+            workouts.push({
+                activity_id: 'strength_' + dateStr,
                 date: `${dateStr}T12:00:00`,
                 exercises: { ex1, ex2, ex3, ex4 }
-            };
+            });
 
-            try {
-                const res = await fetch('/api/strength/save', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
-                });
-                const data = await res.json();
-                alert(data.message);
-                closeModal();
-                loadCalendar();
-                loadReadiness();
-            } catch (e) {
-                alert('Kunne ikke gemme: ' + e.message);
-            }
+            saveLocalStrengthWorkouts(workouts);
+            alert('Styrketræning gemt succesfuldt i browseren!');
+            closeModal();
+            loadCalendar();
         }
 
-        async function deleteStrengthFromModal(dateStr) {
+        function deleteStrengthFromModal(dateStr) {
             if (!confirm(`Er du sikker på, at du vil slette styrketræningen for den ${dateStr}?`)) return;
 
-            try {
-                const res = await fetch(`/api/strength/delete/${dateStr}`, {
-                    method: 'DELETE'
-                });
-                const data = await res.json();
-                alert(data.message);
-                closeModal();
-                loadCalendar();
-                loadReadiness();
-            } catch (e) {
-                alert('Kunne ikke slette: ' + e.message);
-            }
+            let workouts = getLocalStrengthWorkouts();
+            workouts = workouts.filter(w => !w.date.startsWith(dateStr));
+            saveLocalStrengthWorkouts(workouts);
+
+            alert('Styrketræning slettet!');
+            closeModal();
+            loadCalendar();
         }
 
         function openActivityModal(dateStr) {
@@ -580,7 +584,6 @@
             }
         }
 
-        // MAF Fremgangs Graf
         async function loadMAFProgressChart() {
             try {
                 const res = await fetch('/api/maf/progress');
@@ -664,63 +667,36 @@
             } catch (e) { console.error(e); }
         }
 
-        async function loadPace30Chart() {
+        async function loadHRVChart() {
             try {
-                const res = await fetch('/api/running/pace-30days');
-                let rawData = await res.json();
-                let processed = processMafTitles(rawData);
+                const res = await fetch('/api/health/hrv-14days');
+                const data = await res.json();
+                const ctx = document.getElementById('hrvChart').getContext('2d');
+                if (hrvChart) hrvChart.destroy();
                 
-                const mafStartDate = new Date('2026-07-13T00:00:00');
-                let filteredData = processed.filter(d => new Date(d.date) >= mafStartDate);
-
-                const thirtyDaysAgo = new Date();
-                thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-                filteredData = filteredData.filter(d => new Date(d.date) >= thirtyDaysAgo);
-
-                const ctx = document.getElementById('pace30Chart').getContext('2d');
-                if (pace30Chart) pace30Chart.destroy();
-                
-                pace30Chart = new Chart(ctx, {
+                hrvChart = new Chart(ctx, {
                     type: 'line',
                     data: {
-                        labels: filteredData.map(d => d.displayTitle),
+                        labels: data.map(d => d.date.slice(5)),
                         datasets: [{
-                            label: 'Pace (min/km)',
-                            data: filteredData.map(d => d.avg_pace_min_km),
-                            borderColor: '#ef4444', 
-                            backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                            label: 'HRV (ms)',
+                            data: data.map(d => d.hrv),
+                            borderColor: '#22c55e', 
+                            backgroundColor: 'rgba(34, 197, 94, 0.1)',
                             fill: true, 
-                            tension: 0.3,
+                            tension: 0.3, 
                             borderWidth: 2, 
-                            pointRadius: 4, 
-                            pointBackgroundColor: '#ef4444',
-                            pointBorderColor: '#fff',
-                            pointBorderWidth: 1
+                            pointRadius: 3, 
+                            pointBackgroundColor: '#22c55e'
                         }]
                     },
                     options: {
-                        responsive: true, 
-                        maintainAspectRatio: false,
+                        responsive: true, maintainAspectRatio: false,
                         scales: {
-                            y: { 
-                                reverse: true, 
-                                grid: { color: '#2a3447' }, 
-                                ticks: { callback: v => formatPace(v), font: { size: 10 } } 
-                            },
-                            x: { 
-                                grid: { display: false },
-                                ticks: { color: '#e2e8f0', font: { weight: 'bold', size: 10 } }
-                            }
+                            y: { grid: { color: '#2a3447' }, ticks: { font: { size: 10 } }, beginAtZero: false },
+                            x: { grid: { display: false }, ticks: { font: { size: 9 }, maxTicksLimit: 7 } }
                         },
-                        plugins: { 
-                            legend: { display: false },
-                            tooltip: {
-                                callbacks: {
-                                    title: (items) => items[0].label,
-                                    label: (item) => ` Pace: ${formatPace(item.raw)} min/km`
-                                }
-                            }
-                        }
+                        plugins: { legend: { display: false } }
                     }
                 });
             } catch (e) { console.error(e); }
@@ -761,7 +737,7 @@
                 loadCalendar(),
                 loadSyncStatus(),
                 loadMAFProgressChart(),
-                loadPace30Chart(),
+                loadHRVChart(),
                 loadRHRChart()
             ]);
         }
