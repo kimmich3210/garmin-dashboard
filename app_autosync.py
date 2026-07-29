@@ -374,11 +374,26 @@ async def get_training_readiness():
 
 @app.get("/api/activities/all")
 async def get_all_activities():
-    """Endpoint der henter alle aktiviteter til kalenderen."""
     conn = get_db_connection()
     rows = conn.execute("SELECT * FROM activities ORDER BY date DESC").fetchall()
     conn.close()
     return [dict(row) for row in rows]
+
+@app.get("/api/activity/{date_str}")
+async def get_activity_by_date(date_str: str):
+    """Henter specifik aktivitet for en bestemt dato."""
+    conn = get_db_connection()
+    row = conn.execute("SELECT * FROM activities WHERE date LIKE ? LIMIT 1", (f"{date_str}%",)).fetchone()
+    conn.close()
+    if not row:
+        raise HTTPException(404, "Ingen aktivitet fundet på denne dato")
+    return dict(row)
+
+@app.get("/activity", response_class=HTMLResponse)
+async def activity_page():
+    """Viser den dedikerede side for en specifik træning."""
+    html_path = Path(__file__).parent / "activity.html"
+    return html_path.read_text(encoding="utf-8")
 
 @app.get("/", response_class=HTMLResponse)
 async def dashboard():
@@ -387,4 +402,4 @@ async def dashboard():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", poprt=8000)
+    uvicorn.run(app, host="0.0.0.0", port=8000)

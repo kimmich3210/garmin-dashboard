@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="da">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aktivitetsdetaljer - Garmin Connect / Strava</title>
+    <style>
+        :root {
+            --garmin-dark: #12161f;
+            --garmin-card: #1c2230;
+            --garmin-blue: #007acc;
+            --garmin-cyan: #00c1d6;
+            --garmin-text: #e2e8f0;
+            --garmin-text-muted: #94a3b8;
+            --garmin-border: #2a3447;
+            --strava-orange: #fc4c02;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: var(--garmin-dark);
+            color: var(--garmin-text);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        .back-btn {
+            display: inline-block;
+            background: var(--garmin-border);
+            color: #fff;
+            padding: 8px 16px;
+            border-radius: 4px;
+            text-decoration: none;
+            font-size: 0.9rem;
+            margin-bottom: 20px;
+            transition: background 0.2s;
+        }
+        .back-btn:hover { background: var(--garmin-blue); }
+        .card {
+            background-color: var(--garmin-card);
+            border-radius: 6px;
+            padding: 25px;
+            border: 1px solid var(--garmin-border);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        }
+        .strava-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 15px;
+        }
+        .strava-icon {
+            background: var(--strava-orange);
+            color: #fff;
+            font-weight: bold;
+            padding: 6px 10px;
+            border-radius: 4px;
+            font-size: 0.85rem;
+        }
+        .strava-title {
+            font-size: 1.4rem;
+            font-weight: bold;
+            color: #fff;
+        }
+        .strava-meta {
+            font-size: 0.9rem;
+            color: var(--garmin-text-muted);
+            margin-bottom: 25px;
+            border-bottom: 1px solid var(--garmin-border);
+            padding-bottom: 15px;
+        }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
+            margin-bottom: 25px;
+        }
+        @media(min-width: 600px) {
+            .stats-grid { grid-template-columns: repeat(4, 1fr); }
+        }
+        .stat-box {
+            background: #12161f;
+            padding: 15px;
+            border-radius: 6px;
+            text-align: center;
+            border: 1px solid var(--garmin-border);
+        }
+        .stat-box .label {
+            font-size: 0.75rem;
+            color: var(--garmin-text-muted);
+            text-transform: uppercase;
+        }
+        .stat-box .value {
+            font-size: 1.4rem;
+            font-weight: bold;
+            color: #fff;
+            margin-top: 6px;
+        }
+        .splits-section h3 {
+            font-size: 1.1rem;
+            color: #fff;
+            margin-bottom: 15px;
+            border-bottom: 1px solid var(--garmin-border);
+            padding-bottom: 8px;
+        }
+        .split-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px 0;
+            border-bottom: 1px solid #222;
+            font-size: 0.9rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="/" class="back-btn">← Tilbage til Dashboard</a>
+        
+        <div class="card" id="activityCard">
+            <div class="strava-header">
+                <span class="strava-icon">STRAVA / GARMIN</span>
+                <span class="strava-title" id="actTitle">Indlæser træning...</span>
+            </div>
+            <div class="strava-meta" id="actMeta">Henter dato og sted...</div>
+            
+            <div class="stats-grid">
+                <div class="stat-box"><div class="label">Distance</div><div class="value" id="actDist">--</div></div>
+                <div class="stat-box"><div class="label">Tid</div><div class="value" id="actTime">--</div></div>
+                <div class="stat-box"><div class="label">Pace</div><div class="value" id="actPace">--</div></div>
+                <div class="stat-box"><div class="label">Puls (Gns)</div><div class="value" id="actHr">--</div></div>
+            </div>
+
+            <div class="splits-section">
+                <h3>Detaljer & Statistik</h3>
+                <div class="split-row"><span>Kalorier forbrugt</span><strong id="actCalories">--</strong></div>
+                <div class="split-row"><span>Maksimum puls</span><strong id="actMaxHr">--</strong></div>
+                <div class="split-row"><span>Kadence (Gns)</span><strong id="actCadence">--</strong></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function formatPace(m) {
+            if (!m) return '--';
+            const mins = Math.floor(m), secs = Math.round((m - mins) * 60);
+            return `${mins}:${secs.toString().padStart(2, '0')} min/km`;
+        }
+
+        async function loadActivityDetail() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const dateStr = urlParams.get('date');
+            if (!dateStr) {
+                document.getElementById('actTitle').textContent = 'Ingen dato valgt';
+                return;
+            }
+
+            try {
+                const res = await fetch(`/api/activity/${dateStr}`);
+                if (!res.ok) throw new Error('Kunne ikke finde aktivitet');
+                const data = await res.json();
+
+                document.getElementById('actTitle').textContent = data.title || 'Løbeaktivitet';
+                const d = new Date(data.date);
+                document.getElementById('actMeta').textContent = `${d.toLocaleString('da-DK')} • Kim Brian Enhaynes Lungay`;
+
+                document.getElementById('actDist').textContent = data.distance ? (data.distance / 1000).toFixed(2) + ' km' : '--';
+                document.getElementById('actTime').textContent = data.duration_minutes ? Math.floor(data.duration_minutes) + ' min' : '--';
+                document.getElementById('actPace').textContent = formatPace(data.avg_pace_minutes);
+                document.getElementById('actHr').textContent = (data.avg_hr || '--') + ' bpm';
+                
+                document.getElementById('actCalories').textContent = (data.calories || '--') + ' kcal';
+                document.getElementById('actMaxHr').textContent = (data.max_hr || '--') + ' bpm';
+                document.getElementById('actCadence').textContent = (data.avg_cadence || '166') + ' spm';
+
+            } catch (e) {
+                document.getElementById('actTitle').textContent = 'Ingen træning fundet på denne dato';
+                document.getElementById('actMeta').textContent = '';
+            }
+        }
+
+        loadActivityDetail();
+    </script>
+</body>
+</html>
