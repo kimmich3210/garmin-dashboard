@@ -70,10 +70,17 @@ class GarminSync:
             if not self.login():
                 return []
         try:
-            batch = self.client.get_activities(0, 50)
+            batch = self.client.get_activities(0, 100)
             if not batch:
                 return []
-            return [self._normalize_activity(a) for a in batch]
+            
+            activities = []
+            for a in batch:
+                norm = self._normalize_activity(a)
+                # KUN LØB: Hvis det er en gåtur eller andet, springes det over!
+                if norm["activity_type"] in ["running", "treadmill_running", "track_running"]:
+                    activities.append(norm)
+            return activities
         except Exception as e:
             logger.error(f"Failed to fetch activities: {e}")
             return []
@@ -158,7 +165,7 @@ class GarminSync:
         return {
             "activity_type": raw.get("activityType", {}).get("typeKey", "running"),
             "date": raw.get("startTimeLocal"),
-            "title": raw.get("activityName", "Løbeaktivitet"),
+            "title": raw.get("activityName", "Løbetur"), # Bruger præcis det navn Garmin Connect giver
             "distance": raw.get("distance", 0),
             "calories": raw.get("calories", 0),
             "duration_minutes": duration_mins,
@@ -201,7 +208,6 @@ def init_db():
         sample_activities = [
             ("running", "2026-07-28T08:30:00.0", "Morgenløb", 7500, 480, 38.5, 148, 162, 5.1, 4.5),
             ("running", "2026-07-26T09:00:00.0", "Aerob Grundform", 10000, 620, 52.0, 152, 168, 5.2, 4.8),
-            ("walking", "2026-07-25T14:00:00.0", "Eftermiddagstur", 4000, 200, 45.0, 110, 125, 11.2, 10.0),
             ("running", "2026-07-24T07:15:00.0", "Intervalløb", 6000, 400, 29.0, 158, 175, 4.8, 4.2),
         ]
         cursor.executemany("""
@@ -285,7 +291,6 @@ async def get_resting_hr():
 @app.get("/api/running/pace-30days")
 async def get_running_pace_30days():
     conn = get_db_connection()
-    # FILTRERER KUN LØB (running, treadmill_running, track_running) FRA
     rows = conn.execute("""
         SELECT date, title, distance, avg_pace_minutes as avg_pace_min_km, avg_hr, max_hr
         FROM activities
@@ -304,7 +309,7 @@ async def get_training_readiness():
 @app.get("/api/activities/all")
 async def get_all_activities():
     conn = get_db_connection()
-    rows = conn.execute("SELECT * FROM activities ORDER BY date DESC").fetchall()
+    rows = conn.execute("SELECT * FROM activities WHERE activity_type IN ('running', 'treadmill_running', 'track_running') ORDER BY date DESC").fetchall()
     conn.close()
     return [dict(row) for row in rows]
 

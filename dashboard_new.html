@@ -105,18 +105,12 @@
         }
         .cal-cell:hover { border-color: var(--garmin-cyan); }
         
-        /* Dynamiske farver til kalender-celler */
+        /* Løb markeres med rød kant og rød baggrundstone */
         .cal-cell.is-running { border-left: 3px solid var(--garmin-red); background: rgba(239, 68, 68, 0.08); }
-        .cal-cell.is-walking { border-left: 3px solid var(--garmin-green); background: rgba(34, 197, 94, 0.08); }
-
         .cal-date { font-size: 0.75rem; color: var(--garmin-text-muted); text-align: left; }
         
         .cal-activity-badge.running {
             font-size: 0.65rem; background: rgba(239, 68, 68, 0.2); color: var(--garmin-red);
-            padding: 2px 4px; border-radius: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left;
-        }
-        .cal-activity-badge.walking {
-            font-size: 0.65rem; background: rgba(34, 197, 94, 0.2); color: var(--garmin-green);
             padding: 2px 4px; border-radius: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left;
         }
 
@@ -128,7 +122,7 @@
         .activity-detail-card.active { display: block; }
         .strava-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
         .strava-title-group { display: flex; align-items: center; gap: 10px; }
-        .strava-icon { background: var(--strava-orange); color: #fff; font-weight: bold; padding: 4px 8px; border-radius: 4px; font-size: 0.8rem; }
+        .strava-icon { background: var(--garmin-red); color: #fff; font-weight: bold; padding: 4px 8px; border-radius: 4px; font-size: 0.8rem; }
         .strava-title { font-size: 1.1rem; font-weight: bold; color: #fff; }
         .strava-meta { font-size: 0.8rem; color: var(--garmin-text-muted); margin-bottom: 15px; }
         .strava-stats-grid {
@@ -138,7 +132,7 @@
         .stat-box .label { font-size: 0.75rem; color: var(--garmin-text-muted); }
         .stat-box .value { font-size: 1.2rem; font-weight: bold; color: #fff; margin-top: 4px; }
         .view-details-btn {
-            display: inline-block; background: var(--strava-orange); color: #fff; text-decoration: none;
+            display: inline-block; background: var(--garmin-red); color: #fff; text-decoration: none;
             padding: 8px 16px; border-radius: 4px; font-size: 0.85rem; font-weight: bold; transition: opacity 0.2s;
         }
         .view-details-btn:hover { opacity: 0.9; }
@@ -213,12 +207,12 @@
         <div class="activity-detail-card" id="activityDetailCard">
             <div class="strava-header">
                 <div class="strava-title-group">
-                    <span class="strava-icon">GARMIN</span>
+                    <span class="strava-icon">LØB</span>
                     <span class="strava-title" id="detTitle">Vælg en dag i kalenderen</span>
                 </div>
                 <a id="detLinkBtn" href="#" class="view-details-btn" style="display: none;">Se fuld analyse →</a>
             </div>
-            <div class="strava-meta" id="detMeta">Tryk på en dag med træning for at se splits, puls og data.</div>
+            <div class="strava-meta" id="detMeta">Tryk på en dag med løb for at se splits, puls og data.</div>
             <div class="strava-stats-grid">
                 <div class="stat-box"><div class="label">DISTANCE</div><div class="value" id="detDist">-- km</div></div>
                 <div class="stat-box"><div class="label">TID</div><div class="value" id="detTime">--:--</div></div>
@@ -316,17 +310,9 @@
 
                     if (dayActivities.length > 0) {
                         const act = dayActivities[0];
-                        const actType = (act.activity_type || '').toLowerCase();
-                        const actTitle = (act.title || 'Aktivitet');
-
-                        // Tjek om det er gang (walking) eller løb (running)
-                        if (actType.includes('walk') || actTitle.toLowerCase().includes('gang') || actTitle.toLowerCase().includes('gå')) {
-                            cellClass = 'is-walking';
-                            badgeHtml = `<div class="cal-activity-badge walking">${actTitle}</div>`;
-                        } else {
-                            cellClass = 'is-running';
-                            badgeHtml = `<div class="cal-activity-badge running">${actTitle}</div>`;
-                        }
+                        cellClass = 'is-running';
+                        // Viser det nøjagtige navn direkte fra Garmin Connect
+                        badgeHtml = `<div class="cal-activity-badge running">${act.title}</div>`;
                     }
 
                     grid.innerHTML += `
@@ -350,7 +336,7 @@
             }
 
             card.classList.add('active');
-            document.getElementById('detTitle').textContent = match.title || 'Løbeaktivitet';
+            document.getElementById('detTitle').textContent = match.title; // Præcist Garmin navn
             
             const d = new Date(match.date);
             document.getElementById('detMeta').textContent = `${d.toLocaleString('da-DK')} • Vallensbæk`;
@@ -412,12 +398,12 @@
                 pace30Chart = new Chart(ctx, {
                     type: 'line',
                     data: {
-                        labels: data.map(d => `${d.date.split('T')[0]} (${d.title || 'Løb'})`),
+                        labels: data.map(d => `${d.date.split('T')[0]} (${d.title})`),
                         datasets: [{
                             label: 'Pace (min/km)',
                             data: data.map(d => d.avg_pace_min_km),
-                            borderColor: '#00c1d6', backgroundColor: 'rgba(0, 193, 214, 0.08)',
-                            fill: true, tension: 0.2, borderWidth: 2, pointRadius: 3, pointBackgroundColor: '#00c1d6'
+                            borderColor: '#ef4444', backgroundColor: 'rgba(239, 68, 68, 0.08)',
+                            fill: true, tension: 0.2, borderWidth: 2, pointRadius: 3, pointBackgroundColor: '#ef4444'
                         }]
                     },
                     options: {
