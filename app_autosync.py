@@ -144,53 +144,80 @@ class GarminSync:
         except:
             pass
 
-        recent_run_penalty = 0
-        last_activity_text = "Ingen aktivitet fundet"
+        recent_penalty = 0
+        last_activity_text = "Ingen nyere træning fundet"
         latest_act = None
 
         try:
             conn = sqlite3.connect(DB_PATH)
             conn.row_factory = sqlite3.Row
             cursor = conn.cursor()
-            row = cursor.execute("""
-                SELECT date, title, distance, duration_minutes 
+            
+            run_row = cursor.execute("""
+                SELECT date, title, distance, duration_minutes, 'running' as type
                 FROM activities 
                 WHERE activity_type IN ('running', 'treadmill_running', 'track_running')
                 ORDER BY date DESC LIMIT 1
             """).fetchone()
+
+            strength_row = cursor.execute("""
+                SELECT date, 'Styrketræning' as title, 0 as distance, 0 as duration_minutes, 'strength' as type
+                FROM strength_workouts
+                ORDER BY date DESC LIMIT 1
+            """).fetchone()
+            
             conn.close()
 
-            if row:
-                latest_act = {"date": row["date"], "distance": row["distance"]}
-        except:
-            pass
+            runs_date = run_row["date"] if run_row else ""
+            strength_date = strength_row["date"] if strength_row else ""
+
+            if runs_date and strength_date:
+                latest_act = strength_row if strength_date >= runs_date else run_row
+            elif strength_row:
+                latest_act = strength_row
+            elif run_row:
+                latest_act = run_row
+
+        except Exception as e:
+            logger.error(f"Fejl ved hentning af seneste aktivitet: {e}")
 
         if latest_act:
             try:
-                run_date_str = latest_act["date"].split("T")[0]
-                run_date = datetime.strptime(run_date_str, "%Y-%m-%d")
+                act_date_str = latest_act["date"].split("T")[0]
+                act_date = datetime.strptime(act_date_str, "%Y-%m-%d")
                 today_date = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
-                days_ago = (today_date - run_date.replace(hour=0, minute=0, second=0, microsecond=0)).days
-                dist_km = (latest_act["distance"] or 0) / 1000
+                days_ago = (today_date - act_date.replace(hour=0, minute=0, second=0, microsecond=0)).days
                 
-                if days_ago == 0:
-                    recent_run_penalty = int(dist_km * 1.5)
-                    last_activity_text = f"Sidste løb: I dag ({dist_km:.1f} km)"
-                elif days_ago == 1:
-                    recent_run_penalty = int(dist_km * 0.8)
-                    last_activity_text = f"Sidste løb: I går ({dist_km:.1f} km)"
+                if latest_act["type"] == "strength":
+                    if days_ago == 0:
+                        recent_penalty = 8
+                        last_activity_text = "Sidste træning: Styrketræning i dag"
+                    elif days_ago == 1:
+                        recent_penalty = 4
+                        last_activity_text = "Sidste træning: Styrketræning i går"
+                    else:
+                        recent_penalty = max(0, int(6 / max(1, days_ago)))
+                        last_activity_text = f"Sidste træning: Styrketræning for {days_ago} dage siden"
                 else:
-                    recent_run_penalty = max(0, int(dist_km * (0.5 / max(1, days_ago))))
-                    last_activity_text = f"Sidste løb: For {days_ago} dage siden ({dist_km:.1f} km)"
+                    dist_km = (latest_act["distance"] or 0) / 1000
+                    if days_ago == 0:
+                        recent_penalty = int(dist_km * 1.5)
+                        last_activity_text = f"Sidste løb: I dag ({dist_km:.1f} km)"
+                    elif days_ago == 1:
+                        recent_penalty = int(dist_km * 0.8)
+                        last_activity_text = f"Sidste løb: I går ({dist_km:.1f} km)"
+                    else:
+                        recent_penalty = max(0, int(dist_km * (0.5 / max(1, days_ago))))
+                        last_activity_text = f"Sidste løb: For {days_ago} dage siden ({dist_km:.1f} km)"
             except Exception as e:
-                logger.error(f"Fejl ved behandling af seneste løb: {e}")
+                logger.error(f"Fejl ved udregning af straf: {e}")
 
         score_parts = []
         if sleep_score is not None: score_parts.append(sleep_score * 0.5)
         if body_battery is not None: score_parts.append(body_battery * 0.5)
 
         score = int(sum(score_parts) / (len(score_parts) * 0.5) if len(score_parts) > 0 else 75)
-        score -= recent_run_penalty
+        score -= recent_penalty
 
         if hrv_status == 'UNBALANCED': score -= 12
         elif hrv_status == 'BALANCED': score += 5

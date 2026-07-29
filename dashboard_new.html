@@ -175,6 +175,10 @@
             background-color: var(--garmin-green); color: #12161f; border: none;
             padding: 8px; border-radius: 4px; font-weight: bold; font-size: 0.8rem; cursor: pointer; width: 100%; margin-top: 5px;
         }
+        .delete-strength-btn {
+            background-color: var(--garmin-red); color: #fff; border: none;
+            padding: 8px; border-radius: 4px; font-weight: bold; font-size: 0.8rem; cursor: pointer; width: 100%; margin-top: 5px;
+        }
 
         .strava-stats-grid {
             display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; background: #12161f;
@@ -437,8 +441,26 @@
                 alert(data.message);
                 closeModal();
                 loadCalendar();
+                loadReadiness();
             } catch (e) {
                 alert('Kunne ikke gemme: ' + e.message);
+            }
+        }
+
+        async function deleteStrengthFromModal(dateStr) {
+            if (!confirm(`Er du sikker på, at du vil slette styrketræningen for den ${dateStr}?`)) return;
+
+            try {
+                const res = await fetch(`/api/strength/delete/${dateStr}`, {
+                    method: 'DELETE'
+                });
+                const data = await res.json();
+                alert(data.message);
+                closeModal();
+                loadCalendar();
+                loadReadiness();
+            } catch (e) {
+                alert('Kunne ikke slette: ' + e.message);
             }
         }
 
@@ -459,7 +481,6 @@
             const contentBody = document.getElementById('modalContentBody');
             const titleEl = document.getElementById('modalTitle');
 
-            // Hvis det er en løbetur
             if (match && match.activity_type !== 'strength') {
                 titleEl.textContent = match.displayTitle;
                 iconBadge.className = 'strava-icon';
@@ -475,12 +496,14 @@
                 linkBtn.style.display = 'block';
                 linkBtn.href = `/activity?date=${dateStr}`;
             } else {
-                // Hvis det er styrke eller en tom dag hvor man vil tilføje styrke
                 titleEl.textContent = 'Styrketræning';
                 iconBadge.className = 'strava-icon strength';
                 iconBadge.textContent = 'STYRKE';
 
                 const ex = (match && match.exercises) ? match.exercises : { ex1: '3x10', ex2: '3x12', ex3: '3x12', ex4: '3x10' };
+                const hasExisting = match && match.activity_type === 'strength';
+
+                let deleteButtonHtml = hasExisting ? `<button class="delete-strength-btn" onclick="deleteStrengthFromModal('${dateStr}')">Slet Styrketræning</button>` : '';
 
                 contentBody.innerHTML = `
                     <div class="strength-form-box">
@@ -502,6 +525,7 @@
                             <input type="text" id="modalEx4" value="${ex.ex4}">
                         </div>
                         <button class="save-strength-btn" onclick="saveStrengthFromModal('${dateStr}')">Gem Styrketræning</button>
+                        ${deleteButtonHtml}
                     </div>
                 `;
                 linkBtn.style.display = 'none';
