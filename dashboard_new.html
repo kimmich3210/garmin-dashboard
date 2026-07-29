@@ -16,6 +16,7 @@
             --garmin-border: #2a3447;
             --garmin-green: #22c55e;
             --garmin-red: #ef4444;
+            --strava-orange: #fc4c02;
         }
 
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -35,7 +36,7 @@
             margin: 0 auto;
         }
 
-        /* Header */
+        /* Header med levende grøn prik og dato */
         .garmin-header {
             display: flex; justify-content: space-between; align-items: center;
             background-color: var(--garmin-card); padding: 15px 25px;
@@ -112,7 +113,7 @@
             padding: 2px 4px; border-radius: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left;
         }
 
-        /* Activity Detail */
+        /* Activity Detail Modal / View */
         .activity-detail-card {
             background-color: var(--garmin-card); border-radius: 6px; padding: 20px;
             border: 1px solid var(--garmin-border); display: none;
@@ -196,10 +197,12 @@
             <div class="calendar-header">
                 <h3 id="calendarMonthTitle">Træningskalender</h3>
             </div>
-            <div class="calendar-grid" id="calendarGrid"></div>
+            <div class="calendar-grid" id="calendarGrid">
+                <!-- Genereres via JS -->
+            </div>
         </div>
 
-        <!-- Aktivitets Detalje -->
+        <!-- Aktivitets Detalje boks -->
         <div class="activity-detail-card" id="activityDetailCard">
             <div class="strava-header">
                 <div class="strava-title-group">
@@ -259,8 +262,9 @@
             return `${mins}:${secs.toString().padStart(2, '0')}`;
         }
 
-        // MAF nummerering fra 13. juli 2026
+        // Hjælpefunktion til at give MAF 1, MAF 2 osv. baseret på kronologi fra 13. juli 2026
         function processMafTitles(activities) {
+            // Sorter ældst først
             const sorted = [...activities].sort((a, b) => new Date(a.date) - new Date(b.date));
             let mafCount = 1;
             const mafStartDate = new Date('2026-07-13T00:00:00');
@@ -302,7 +306,7 @@
                 document.getElementById('calendarMonthTitle').textContent = `Træningskalender — ${monthNames[month]} ${year}`;
 
                 const firstDay = new Date(year, month, 1).getDay();
-                const adjustedFirstDay = firstDay === 0 ? 6 : firstDay - 1;
+                const adjustedFirstDay = firstDay === 0 ? 6 : firstDay - 1; // Mandag start
                 const daysInMonth = new Date(year, month + 1, 0).getDate();
 
                 const grid = document.getElementById('calendarGrid');
@@ -400,7 +404,7 @@
 
         async function triggerSync() {
             const btn = document.getElementById('syncBtn');
-            btn.textContent = 'Synkronisererer...';
+            btn.textContent = 'Synkroniserer...';
             btn.disabled = true;
             try {
                 const res = await fetch('/api/sync/now', { method: 'POST' });
@@ -419,6 +423,7 @@
             try {
                 const res = await fetch('/api/running/pace-30days');
                 let data = await res.json();
+                // Sørg for at graferne også bruger MAF-navnene
                 data = processMafTitles(data);
                 
                 const ctx = document.getElementById('pace30Chart').getContext('2d');
@@ -430,41 +435,17 @@
                         datasets: [{
                             label: 'Pace (min/km)',
                             data: data.map(d => d.avg_pace_min_km),
-                            borderColor: '#ef4444', 
-                            backgroundColor: 'rgba(239, 68, 68, 0.1)',
-                            fill: true, 
-                            tension: 0.3, // Gør kurven blød og pæn
-                            borderWidth: 3, 
-                            pointRadius: 5, 
-                            pointBackgroundColor: '#ef4444',
-                            pointBorderColor: '#fff',
-                            pointBorderWidth: 2
+                            borderColor: '#ef4444', backgroundColor: 'rgba(239, 68, 68, 0.08)',
+                            fill: true, tension: 0.2, borderWidth: 2, pointRadius: 3, pointBackgroundColor: '#ef4444'
                         }]
                     },
                     options: {
-                        responsive: true, 
-                        maintainAspectRatio: false,
+                        responsive: true, maintainAspectRatio: false,
                         scales: {
-                            y: { 
-                                reverse: true, // Omvendt Y-akse så hurtigere pace (lavere min/km) er øverst
-                                grid: { color: '#2a3447' }, 
-                                title: { display: true, text: 'Tempo (Min/km)', color: '#94a3b8' }, 
-                                ticks: { callback: v => formatPace(v) } 
-                            },
-                            x: { 
-                                grid: { display: false },
-                                ticks: { color: '#94a3b8' }
-                            }
+                            y: { reverse: true, grid: { color: '#2a3447' }, title: { display: true, text: 'Min/km', color: '#94a3b8' }, ticks: { callback: v => formatPace(v) } },
+                            x: { grid: { display: false } }
                         },
-                        plugins: { 
-                            legend: { display: false },
-                            tooltip: {
-                                callbacks: {
-                                    title: (items) => items[0].label,
-                                    label: (item) => ` Pace: ${formatPace(item.raw)} min/km`
-                                }
-                            }
-                        }
+                        plugins: { legend: { display: false } }
                     }
                 });
             } catch (e) { console.error(e); }
