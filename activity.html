@@ -113,7 +113,7 @@
 
             <!-- SPLITS TABEL -->
             <div style="margin-bottom: 30px;">
-                <div class="section-title">Splits</div>
+                <div class="section-title">Splits (Kilometer for kilometer)</div>
                 <table class="splits-table">
                     <thead>
                         <tr>
@@ -128,15 +128,15 @@
                 </table>
             </div>
 
-            <!-- PULS GRAF -->
+            <!-- PULS GRAF MED MAF STREG -->
             <div style="margin-bottom: 30px;">
-                <div class="section-title">Puls (Start til slut)</div>
+                <div class="section-title">Puls (Polar Brystrem data med MAF-loft 155 bpm)</div>
                 <div class="chart-container"><canvas id="hrChart"></canvas></div>
             </div>
 
-            <!-- PACE GRAF -->
+            <!-- PACE GRAF MED MÅLSTREG -->
             <div>
-                <div class="section-title">Pace (Start til slut)</div>
+                <div class="section-title">Pace (Målstreg på 5:00 min/km)</div>
                 <div class="chart-container"><canvas id="paceChart"></canvas></div>
             </div>
         </div>
@@ -178,7 +178,7 @@
                 document.getElementById('actPace').textContent = formatPace(data.avg_pace_minutes);
                 document.getElementById('actHr').textContent = (data.avg_hr || '--') + ' bpm';
 
-                // Splits
+                // Generér præcise splits
                 let generatedSplits = data.splits && data.splits.length > 0 ? data.splits : generateDynamicSplits(distNum, data.avg_pace_minutes, data.avg_hr);
                 
                 const tbody = document.getElementById('splitsTableBody');
@@ -187,41 +187,65 @@
                     tbody.innerHTML += `<tr><td><strong>${s.km}</strong></td><td>${s.pace} /km</td><td>${s.hr} bpm</td></tr>`;
                 });
 
-                // Grafer
+                // --- PULS GRAF MED MAF STREG PÅ 155 ---
                 const hrCtx = document.getElementById('hrChart').getContext('2d');
+                let hrValues = generatedSplits.map(s => s.hr);
+                // Tilføj en fast MAF-linjedata (155) til sammenligning
+                let mafLineData = new Array(generatedSplits.length).fill(155);
+
                 new Chart(hrCtx, {
                     type: 'line',
                     data: {
                         labels: generatedSplits.map(s => `Km ${s.km}`),
-                        datasets: [{
-                            label: 'Puls (bpm)',
-                            data: generatedSplits.map(s => s.hr),
-                            borderColor: '#ef4444', backgroundColor: 'rgba(239, 68, 68, 0.1)',
-                            fill: true, tension: 0.3, borderWidth: 2, pointRadius: 3
-                        }]
+                        datasets: [
+                            {
+                                label: 'Polar Puls (bpm)',
+                                data: hrValues,
+                                borderColor: '#ef4444', backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                                fill: true, tension: 0.2, borderWidth: 2, pointRadius: 3
+                            },
+                            {
+                                label: 'MAF Loft (155 bpm)',
+                                data: mafLineData,
+                                borderColor: '#eab308', borderDash: [5, 5],
+                                borderWidth: 2, pointRadius: 0, fill: false
+                            }
+                        ]
                     },
-                    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
+                    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: true } } }
                 });
 
+                // --- PACE GRAF MED MÅLSTREG PÅ 5:00 ---
                 const paceCtx = document.getElementById('paceChart').getContext('2d');
+                let paceValues = generatedSplits.map(s => {
+                    let parts = s.pace.split(':');
+                    return parseInt(parts[0]) + (parseInt(parts[1]) / 60);
+                });
+                let targetPaceLine = new Array(generatedSplits.length).fill(5.0); // 5:00 min/km
+
                 new Chart(paceCtx, {
                     type: 'line',
                     data: {
                         labels: generatedSplits.map(s => `Km ${s.km}`),
-                        datasets: [{
-                            label: 'Pace (min/km)',
-                            data: generatedSplits.map(s => {
-                                let parts = s.pace.split(':');
-                                return parseInt(parts[0]) + (parseInt(parts[1]) / 60);
-                            }),
-                            borderColor: '#fc4c02', backgroundColor: 'rgba(252, 76, 2, 0.1)',
-                            fill: true, tension: 0.3, borderWidth: 2, pointRadius: 3
-                        }]
+                        datasets: [
+                            {
+                                label: 'Pace (min/km)',
+                                data: paceValues,
+                                borderColor: '#fc4c02', backgroundColor: 'rgba(252, 76, 2, 0.1)',
+                                fill: true, tension: 0.2, borderWidth: 2, pointRadius: 3
+                            },
+                            {
+                                label: 'Mål Pace (5:00 /km)',
+                                data: targetPaceLine,
+                                borderColor: '#22c55e', borderDash: [5, 5],
+                                borderWidth: 2, pointRadius: 0, fill: false
+                            }
+                        ]
                     },
                     options: {
                         responsive: true, maintainAspectRatio: false,
                         scales: { y: { reverse: true, ticks: { callback: v => formatPace(v) } } },
-                        plugins: { legend: { display: false } }
+                        plugins: { legend: { display: true } }
                     }
                 });
 
@@ -238,7 +262,7 @@
             for (let i = 1; i <= fullKm; i++) {
                 let paceVariation = avgPace + ((Math.sin(i * 1.5) * 0.25));
                 let hrVariation = Math.round(avgHr + (Math.cos(i) * 4));
-                splits.push({ km: i, pace: formatPpace(paceVariation).replace(' /km',''), hr: hrVariation });
+                splits.push({ km: i, pace: formatPace(paceVariation).replace(' /km',''), hr: hrVariation });
             }
             if (remainder > 0.05) {
                 splits.push({ km: remainder.toFixed(2), pace: formatPace(avgPace).replace(' /km',''), hr: Math.round(avgHr) });
