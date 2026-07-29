@@ -93,9 +93,17 @@
         /* Styrketræning Genvej */
         .quick-strength-bar {
             background-color: var(--garmin-card); border-radius: 8px; padding: 12px 15px;
-            border: 1px solid var(--garmin-border); display: flex; justify-content: space-between; align-items: center;
+            border: 1px solid var(--garmin-border); display: flex; flex-direction: column; gap: 8px;
+        }
+        @media(min-width: 500px) {
+            .quick-strength-bar { flex-direction: row; justify-content: space-between; align-items: center; }
         }
         .quick-strength-bar span { font-size: 0.85rem; font-weight: 600; color: #fff; }
+        .strength-controls { display: flex; gap: 8px; align-items: center; }
+        .strength-date-input {
+            background: #12161f; border: 1px solid var(--garmin-border); color: #fff;
+            padding: 6px 10px; border-radius: 4px; font-size: 0.8rem;
+        }
         .strength-btn {
             background-color: var(--garmin-green); color: #12161f; border: none;
             padding: 8px 14px; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 0.8rem;
@@ -152,7 +160,7 @@
         
         .modal-card {
             background-color: var(--garmin-card); border-radius: 8px; padding: 20px;
-            width: 100%; max-width: 400px; border: 1px solid var(--garmin-border);
+            width: 100%; max-width: 420px; border: 1px solid var(--garmin-border);
             box-shadow: 0 10px 25px rgba(0,0,0,0.5); position: relative;
             transform: translateY(20px); transition: transform 0.2s ease;
         }
@@ -171,6 +179,14 @@
         .strava-icon.strength { background: var(--garmin-green); color: #12161f; }
         .strava-title { font-size: 1rem; font-weight: bold; color: #fff; }
         .strava-meta { font-size: 0.75rem; color: var(--garmin-text-muted); margin-bottom: 15px; }
+        
+        /* Styrkeøvelser liste styling */
+        .strength-exercises-box {
+            background: #12161f; padding: 15px; border-radius: 6px; border: 1px solid var(--garmin-border); margin-bottom: 15px;
+        }
+        .strength-exercises-box h4 { font-size: 0.85rem; color: var(--garmin-green); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px; }
+        .strength-exercises-box ul { padding-left: 18px; font-size: 0.9rem; color: var(--garmin-text); display: grid; gap: 6px; }
+
         .strava-stats-grid {
             display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; background: #12161f;
             padding: 12px; border-radius: 6px; margin-bottom: 15px; text-align: center;
@@ -241,10 +257,13 @@
             <div class="readiness-circle-badge" id="readinessBadge">--%</div>
         </div>
 
-        <!-- HURTIG TILFØJ STYRKETRÆNING -->
+        <!-- STYRKETRÆNING MED DATOVALG -->
         <div class="quick-strength-bar">
-          <span>🏋️ Styrketræning i dag?</span>
-          <button class="strength-btn" onclick="addQuickStrength()">+ Tilføj styrketræning</button>
+          <span>🏋️ Tilføj styrketræning</span>
+          <div class="strength-controls">
+            <input type="date" id="strengthDateInput" class="strength-date-input">
+            <button class="strength-btn" onclick="addQuickStrength()">+ Tilføj</button>
+          </div>
         </div>
 
         <!-- Månedlig Kalender -->
@@ -290,12 +309,10 @@
                 </div>
             </div>
             <div class="strava-meta" id="modalMeta">Dato og tidspunkt</div>
-            <div class="strava-stats-grid" id="modalStatsGrid">
-                <div class="stat-box"><div class="label">DISTANCE</div><div class="value" id="modalDist">-- km</div></div>
-                <div class="stat-box"><div class="label">TID</div><div class="value" id="modalTime">--:--</div></div>
-                <div class="stat-box"><div class="label">PACE</div><div class="value" id="modalPace">-- min/km</div></div>
-                <div class="stat-box"><div class="label">PULS</div><div class="value" id="modalHr">-- bpm</div></div>
-            </div>
+            
+            <!-- Dynamisk indhold for styrke eller løb -->
+            <div id="modalContentBody"></div>
+
             <a id="modalLinkBtn" href="#" class="view-details-btn">Se fuld analyse →</a>
         </div>
     </div>
@@ -307,6 +324,12 @@
 
         let rhrChart, pace30Chart;
         let cachedActivities = [];
+
+        // Sæt standard dato i dato-vælgeren til i dag ved indlæsning
+        window.addEventListener('DOMContentLoaded', () => {
+            const today = new Date().toISOString().split('T')[0];
+            document.getElementById('strengthDateInput').value = today;
+        });
 
         const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
         const todayStr = new Date().toLocaleDateString('da-DK', options);
@@ -355,7 +378,6 @@
                 const res = await fetch('/api/activities/all');
                 let rawActivities = await res.json();
                 
-                // Hent lokale styrketræninger fra browserens hukommelse (localStorage)
                 const localStrength = JSON.parse(localStorage.getItem('strength_workouts') || '[]');
                 rawActivities = [...rawActivities, ...localStrength];
 
@@ -418,8 +440,13 @@
         }
 
         function addQuickStrength() {
-            const now = new Date();
-            const dateStr = now.toISOString(); // Automatisk dagens dato og tid
+            const selectedDateVal = document.getElementById('strengthDateInput').value;
+            if (!selectedDateVal) {
+                alert('Vælg venligst en dato.');
+                return;
+            }
+            
+            const dateStr = `${selectedDateVal}T12:00:00`;
             
             const newStrength = {
                 activity_id: 'strength_' + Date.now(),
@@ -428,7 +455,6 @@
                 title: 'Styrketræning',
                 distance: 0,
                 duration_minutes: 45,
-                avg_hr: 120,
                 displayTitle: 'Styrketræning'
             };
 
@@ -436,7 +462,7 @@
             localStrength.push(newStrength);
             localStorage.setItem('strength_workouts', JSON.stringify(localStrength));
 
-            alert('Styrketræning tilføjet for i dag!');
+            alert(`Styrketræning tilføjet for den ${selectedDateVal}!`);
             loadCalendar();
         }
 
@@ -452,28 +478,39 @@
 
             const d = new Date(match.date);
             document.getElementById('modalTitle').textContent = match.displayTitle;
-            document.getElementById('modalMeta').textContent = `${d.toLocaleString('da-DK')} • Vallensbæk`;
+            // Fjernet klokkeslæt, viser kun dato og sted
+            const dateOnlyStr = d.toLocaleDateString('da-DK', { year: 'numeric', month: 'long', day: 'numeric' });
+            document.getElementById('modalMeta').textContent = `${dateOnlyStr} • Vallensbæk`;
 
             const iconBadge = document.getElementById('modalIconBadge');
             const linkBtn = document.getElementById('modalLinkBtn');
-            const statsGrid = document.getElementById('modalStatsGrid');
+            const contentBody = document.getElementById('modalContentBody');
 
             if (match.activity_type === 'strength') {
                 iconBadge.className = 'strava-icon strength';
                 iconBadge.textContent = 'STYRKE';
-                statsGrid.innerHTML = `
-                    <div class="stat-box"><div class="label">TYPE</div><div class="value">Styrke</div></div>
-                    <div class="stat-box"><div class="label">TID</div><div class="value">45 min</div></div>
+                contentBody.innerHTML = `
+                    <div class="strength-exercises-box">
+                        <h4>Gennemførte Øvelser:</h4>
+                        <ul>
+                            <li>Leg Curls (Baglår)</li>
+                            <li>Hip Adductor (Pres benene sammen)</li>
+                            <li>Hip Abductor (Pres benene udad)</li>
+                            <li>Step-downs (Trin-ned øvelse)</li>
+                        </ul>
+                    </div>
                 `;
                 linkBtn.style.display = 'none';
             } else {
                 iconBadge.className = 'strava-icon';
                 iconBadge.textContent = 'LØB';
-                statsGrid.innerHTML = `
-                    <div class="stat-box"><div class="label">DISTANCE</div><div class="value">${match.distance ? (match.distance / 1000).toFixed(2) + ' km' : '-- km'}</div></div>
-                    <div class="stat-box"><div class="label">TID</div><div class="value">${match.duration_minutes ? Math.floor(match.duration_minutes) + ' min' : '--'}</div></div>
-                    <div class="stat-box"><div class="label">PACE</div><div class="value">${formatPace(match.avg_pace_minutes)} min/km</div></div>
-                    <div class="stat-box"><div class="label">PULS</div><div class="value">${match.avg_hr || '--'} bpm</div></div>
+                contentBody.innerHTML = `
+                    <div class="strava-stats-grid">
+                        <div class="stat-box"><div class="label">DISTANCE</div><div class="value">${match.distance ? (match.distance / 1000).toFixed(2) + ' km' : '-- km'}</div></div>
+                        <div class="stat-box"><div class="label">TID</div><div class="value">${match.duration_minutes ? Math.floor(match.duration_minutes) + ' min' : '--'}</div></div>
+                        <div class="stat-box"><div class="label">PACE</div><div class="value">${formatPace(match.avg_pace_minutes)} min/km</div></div>
+                        <div class="stat-box"><div class="label">PULS</div><div class="value">${match.avg_hr || '--'} bpm</div></div>
+                    </div>
                 `;
                 linkBtn.style.display = 'block';
                 linkBtn.href = `/activity?date=${dateStr}`;
