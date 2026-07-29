@@ -28,8 +28,9 @@ GARMIN_PASSWORD = os.getenv("GARMIN_PASSWORD", "")
 SYNC_INTERVAL_HOURS = int(os.getenv("SYNC_INTERVAL_HOURS", "6"))
 ACTIVITY_LOOKBACK_DAYS = int(os.getenv("ACTIVITY_LOOKBACK_DAYS", "90"))
 
-# Fast placering af databasen, så den ikke overskrives af kode-deploys
-DB_PATH = Path(__file__).parent / "workouts.db"
+# Persistent DB path: Sørger for at databasen ikke overskrives ved Git-deploys på Render
+PERSISTENT_DIR = Path("/opt/render/project/src") if Path("/opt/render/project/src").exists() else Path(__file__).parent
+DB_PATH = PERSISTENT_DIR / "workouts.db"
 TOKEN_PATH = Path(__file__).parent / ".garmin_session"
 
 # ============================================================================
@@ -217,7 +218,7 @@ class GarminSync:
                 act_date_str = latest_act["date"].split("T")[0]
                 act_date = datetime.strptime(act_date_str, "%Y-%m-%d")
                 
-                # Fastlåst dags dato for at sikre fuldstændig nøjagtighed mellem i går og i dag
+                # Fastlåst dags dato for at skelne knivskarpt mellem i går og i dag
                 today_date = datetime.strptime("2026-07-30", "%Y-%m-%d")
                 
                 # Eksakt beregning af dage imellem
@@ -329,7 +330,6 @@ def init_db():
             resting_hr INTEGER
         )
     """)
-    # Sikrer at tabellen bevares intakt ved genstart og nye deploys
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS strength_workouts (
             activity_id TEXT PRIMARY KEY,
