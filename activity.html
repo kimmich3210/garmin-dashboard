@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Aktivitetsdetaljer - Strava & Garmin</title>
+    <title>Aktivitetsdetaljer - Strava Athlete Intelligence</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         :root {
@@ -51,7 +51,7 @@
 
         .section-title { font-size: 1.1rem; color: #fff; margin-bottom: 15px; border-bottom: 1px solid var(--garmin-border); padding-bottom: 8px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px; }
         
-        /* Athlete Intelligence Knap & Boks (Stravas AI-stil) */
+        /* AI Knap & Boks */
         .ai-btn-container { margin-bottom: 30px; }
         .ai-btn {
             background: linear-gradient(135deg, #fc4c02 0%, #ff7043 100%);
@@ -72,7 +72,7 @@
         .ai-badge.success { background: rgba(34, 197, 94, 0.2); color: var(--garmin-green); }
         .ai-badge.warning { background: rgba(239, 68, 68, 0.2); color: var(--garmin-red); }
 
-        /* Strava-style Splits Table */
+        /* Splits Tabel */
         .splits-table { width: 100%; border-collapse: collapse; margin-top: 10px; background: #12161f; border-radius: 6px; overflow: hidden; border: 1px solid var(--garmin-border); }
         .splits-table th, .splits-table td { padding: 12px 16px; text-align: left; font-size: 0.9rem; border-bottom: 1px solid var(--garmin-border); }
         .splits-table th { color: var(--garmin-text-muted); font-size: 0.8rem; text-transform: uppercase; background: #182232; }
@@ -100,18 +100,18 @@
                 <div class="stat-box"><div class="label">Puls (Gns)</div><div class="value" id="actHr">--</div></div>
             </div>
 
-            <!-- ATHLETE INTELLIGENCE (STRAVA AI) KNAP -->
+            <!-- ATHLETE INTELLIGENCE KNAP -->
             <div class="ai-btn-container">
                 <button class="ai-btn" onclick="runAIAnalysis()">
-                    <span>✨</span> Strava Athlete Intelligence — Analyser træning
+                    <span>✨</span> Strava Athlete Intelligence — Historisk Analyse
                 </button>
                 <div class="ai-analysis-box" id="aiAnalysisBox">
-                    <h4><span>⚡</span> AI Træneranalyse (Top til toe)</h4>
-                    <div id="aiContent">Analyserer dine splits, MAF-zone og pace...</div>
+                    <h4><span>⚡</span> AI Træneranalyse & Historik</h4>
+                    <div id="aiContent">Indhenter og analyserer dine tidligere løb og historik...</div>
                 </div>
             </div>
 
-            <!-- STRAVA-STIL SPLITS TABEL (KM, PACE, PULS) -->
+            <!-- SPLITS TABEL -->
             <div style="margin-bottom: 30px;">
                 <div class="section-title">Splits</div>
                 <table class="splits-table">
@@ -146,7 +146,9 @@
         Chart.defaults.color = '#94a3b8';
         Chart.defaults.borderColor = '#2a3447';
 
-        let currentActivityData = null;
+        let currentActivity = null;
+        let allHistory = [];
+        let generatedSplits = [];
 
         function formatPace(m) {
             if (!m) return '--';
@@ -163,58 +165,64 @@
             }
 
             try {
-                const res = await fetch(`/api/activity/${dateStr}`);
-                if (!res.ok) throw new Error('Kunne ikke finde aktivitet');
-                const data = await res.json();
-                currentActivityData = data;
+                // Hent både specifik aktivitet og historik parallelt
+                const [resAct, resHistory] = await Promise.all([
+                    fetch(`/api/activity/${dateStr}`),
+                    fetch(`/api/activities/history`)
+                ]);
 
-                document.getElementById('actTitle').textContent = data.title || 'Løbeaktivitet';
-                const d = new Date(data.date);
+                if (!resAct.ok) throw new Error('Kunne ikke finde aktivitet');
+                currentActivity = await resAct.json();
+                allHistory = await resHistory.json();
+
+                document.getElementById('actTitle').textContent = currentActivity.title || 'Løbeaktivitet';
+                const d = new Date(currentActivity.date);
                 document.getElementById('actMeta').textContent = `${d.toLocaleString('da-DK')} • Kim Brian Enhaynes Lungay • Vallensbæk`;
 
-                const distNum = data.distance ? (data.distance / 1000) : 0;
+                const distNum = currentActivity.distance ? (currentActivity.distance / 1000) : 0;
                 document.getElementById('actDist').textContent = distNum.toFixed(2) + ' km';
-                document.getElementById('actTime').textContent = data.duration_minutes ? Math.floor(data.duration_minutes) + ' min' : '--';
-                document.getElementById('actPace').textContent = formatPace(data.avg_pace_minutes);
-                document.getElementById('actHr').textContent = (data.avg_hr || '--') + ' bpm';
+                document.getElementById('actTime').textContent = currentActivity.duration_minutes ? Math.floor(currentActivity.duration_minutes) + ' min' : '--';
+                document.getElementById('actPace').textContent = formatPace(currentActivity.avg_pace_minutes);
+                document.getElementById('actHr').textContent = (currentActivity.avg_hr || '--') + ' bpm';
 
-                // Generér Strava-stil Splits tabel (km, pace, gns puls)
+                // Splits
+                generatedSplits = currentActivity.splits && currentActivity.splits.length > 0 ? currentActivity.splits : generateDynamicSplits(distNum, currentActivity.avg_pace_minutes, currentActivity.avg_hr);
+                
                 const tbody = document.getElementById('splitsTableBody');
                 tbody.innerHTML = '';
-                
-                let splitsToRender = data.splits && data.splits.length > 0 ? data.splits : generateEstimatedSplits(distNum, data.avg_pace_minutes, data.avg_hr);
-                
-                splitsToRender.forEach(s => {
+                generatedSplits.forEach(s => {
                     tbody.innerHTML += `<tr><td><strong>${s.km}</strong></td><td>${s.pace} /km</td><td>${s.hr} bpm</td></tr>`;
                 });
 
-                // Tegn Puls Graf
+                // Grafer
                 const hrCtx = document.getElementById('hrChart').getContext('2d');
                 new Chart(hrCtx, {
                     type: 'line',
                     data: {
-                        labels: ['Start', '25%', '50%', '75%', 'Mål'],
+                        labels: generatedSplits.map(s => `Km ${s.km}`),
                         datasets: [{
                             label: 'Puls (bpm)',
-                            data: [data.avg_hr - 4, data.avg_hr, data.avg_hr + 2, data.avg_hr + 3, data.avg_hr - 1],
+                            data: generatedSplits.map(s => s.hr),
                             borderColor: '#ef4444', backgroundColor: 'rgba(239, 68, 68, 0.1)',
-                            fill: true, tension: 0.3, borderWidth: 2, pointRadius: 2
+                            fill: true, tension: 0.3, borderWidth: 2, pointRadius: 3
                         }]
                     },
                     options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
                 });
 
-                // Tegn Pace Graf
                 const paceCtx = document.getElementById('paceChart').getContext('2d');
                 new Chart(paceCtx, {
                     type: 'line',
                     data: {
-                        labels: ['Start', '25%', '50%', '75%', 'Mål'],
+                        labels: generatedSplits.map(s => `Km ${s.km}`),
                         datasets: [{
                             label: 'Pace (min/km)',
-                            data: [data.avg_pace_minutes + 0.3, data.avg_pace_minutes, data.avg_pace_minutes - 0.1, data.avg_pace_minutes, data.avg_pace_minutes + 0.2],
+                            data: generatedSplits.map(s => {
+                                let parts = s.pace.split(':');
+                                return parseInt(parts[0]) + (parseInt(parts[1]) / 60);
+                            }),
                             borderColor: '#fc4c02', backgroundColor: 'rgba(252, 76, 2, 0.1)',
-                            fill: true, tension: 0.3, borderWidth: 2, pointRadius: 2
+                            fill: true, tension: 0.3, borderWidth: 2, pointRadius: 3
                         }]
                     },
                     options: {
@@ -230,15 +238,14 @@
             }
         }
 
-        function generateEstimatedSplits(totalKm, avgPace, avgHr) {
+        function generateDynamicSplits(totalKm, avgPace, avgHr) {
             let splits = [];
             let fullKm = Math.floor(totalKm);
             let remainder = totalKm - fullKm;
-            
             for (let i = 1; i <= fullKm; i++) {
-                let pVar = avgPace + (Math.sin(i) * 0.15);
-                let hVar = Math.round(avgHr + (Math.cos(i) * 3));
-                splits.push({ km: i, pace: formatPace(pVar).replace(' /km',''), hr: hVar });
+                let paceVariation = avgPace + ((Math.sin(i * 1.5) * 0.25));
+                let hrVariation = Math.round(avgHr + (Math.cos(i) * 4));
+                splits.push({ km: i, pace: formatPace(paceVariation).replace(' /km',''), hr: hrVariation });
             }
             if (remainder > 0.05) {
                 splits.push({ km: remainder.toFixed(2), pace: formatPace(avgPace).replace(' /km',''), hr: Math.round(avgHr) });
@@ -251,33 +258,59 @@
             const content = document.getElementById('aiContent');
             box.classList.add('active');
 
-            if (!currentActivityData) {
-                content.innerHTML = "Kunne ikke indhente data til AI-analyse.";
+            if (!currentActivity) {
+                content.innerHTML = "Kunne ikke indhente data til analysen.";
                 return;
             }
 
-            const avgHr = currentActivityData.avg_hr || 142;
-            const avgPace = currentActivityData.avg_pace_minutes || 5.1;
-            const distKm = currentActivityData.distance ? (currentActivityData.distance / 1000).toFixed(2) : 0;
+            const curDist = currentActivity.distance ? currentActivity.distance / 1000 : 0;
+            const curPace = currentActivity.avg_pace_minutes || 5.0;
+            const curHr = currentActivity.avg_hr || 140;
 
-            // Stravas Athlete Intelligence AI Logik (Top til toe evaluering mod MAF < 155 og Pace < 5:00)
-            let mafValid = avgHr <= 155;
-            let mafBadge = mafValid ? '<span class="ai-badge success">OPTIMAL MAF ZONE</span>' : '<span class="ai-badge warning">OVER PULSLOFT</span>';
-            let mafAnalysis = mafValid 
-                ? `Med en gennemsnitspuls på <strong>${avgHr} bpm</strong> holdt du dig flot under dit maksimale MAF-pulsloft på 155 bpm. Dette opbygger effektivt din iltoptagelse og fedtforbrænding uden at overbelaste det centrale nervesystem.`
-                : `Din gennemsnitspuls på <strong>${avgHr} bpm</strong> lå over dit MAF-pulsloft på 155 bpm. Træningen har trukket mere på de hurtige energireserver end planlagt.`;
+            // Beregn gennemsnit fra historik
+            let totalDist = 0, totalPace = 0, totalHr = 0, count = allHistory.length;
+            allHistory.forEach(a => {
+                totalDist += (a.distance || 0) / 1000;
+                totalPace += (a.avg_pace_minutes || 5.0);
+                totalHr += (a.avg_hr || 140);
+            });
 
-            let paceValid = avgPace <= 5.0;
-            let paceBadge = paceValid ? '<span class="ai-badge success">MÅL NÅET</span>' : '<span class="ai-badge warning">ROLIGT TEMPO</span>';
-            let paceAnalysis = paceValid
-                ? `Du ramte en gennemsnitshastighed på <strong>${formatPace(avgPace)}</strong>, hvilket er hurtigere end dit mål på 5:00 min/km. Utrolig stærk fartkontrol hele turen igennem!`
-                : `Gennemsnitstempoet landede på <strong>${formatPace(avgPace)}</strong> (hvilket er over dit primære 5:00 min/km mål). Hvis dette var en dedikeret restitutions- eller MAF-tur, er det helt efter bogen.`;
+            const avgDistHist = count > 0 ? totalDist / count : curDist;
+            const avgPaceHist = count > 0 ? totalPace / count : curPace;
+            const avgHrHist = count > 0 ? totalHr / count : curHr;
+
+            // Sammenligninger
+            let paceDiff = curPace - avgPaceHist; // Negativ betød hurtigere
+            let hrDiff = curHr - avgHrHist;
+
+            let paceComparisonText = "";
+            if (paceDiff < -0.1) {
+                paceComparisonText = `Dette løb var <strong>hurtigere</strong> end dit historiske gennemsnit (${formatPace(avgPaceHist)}). Du skruede tempoet i vejret!`;
+            } else if (paceDiff > 0.1) {
+                paceComparisonText = `Dette var en mere afmålt og rolig tur sammenlignet med dit historiske gennemsnit på ${formatPace(avgPaceHist)}. Perfekt til genopbygning.`;
+            } else {
+                paceComparisonText = `Dit tempo lagde sig præcis på linje med din sædvanlige historik (${formatPace(avgPaceHist)}). Meget stabil udvikling!`;
+            }
+
+            let hrComparisonText = "";
+            if (hrDiff < -2) {
+                hrComparisonText = `Din gennemsnitspuls var <strong>${Math.abs(Math.round(hrDiff))} bpm lavere</strong> end normalt, hvilket viser fremragende aerob effektivitet og god form.`;
+            } else if (hrDiff > 2) {
+                hrComparisonText = `Din gennemsnitspuls lå ${Math.round(hrDiff)} bpm højere end dit historiske snit, hvilket indikerer at kroppen har arbejdet lidt hårdere i dag.`;
+            } else {
+                hrComparisonText = `Din puls lå fuldstændig stabilt i forhold til dit normale træningsniveau.`;
+            }
+
+            // MAF & Pace Mål Vurdering
+            let mafValid = curHr <= 155;
+            let mafBadge = mafValid ? '<span class="ai-badge success">MÅL NÅET</span>' : '<span class="ai-badge warning">OVER LOFT</span>';
 
             content.innerHTML = `
-                <p><strong>Aktivitetsoverblik:</strong> Du gennemførte <strong>${distKm} km</strong> på ${Math.floor(currentActivityData.duration_minutes || 0)} minutter med et stabilt mønster fra start til slut.</p>
-                <p><strong>1. MAF-Puls Vurdering (&lt; 155 bpm):</strong> ${mafBadge}<br>${mafAnalysis}</p>
-                <p><strong>2. Tempo & Pace Mål (&lt; 5:00 min/km):</strong> ${paceBadge}<br>${paceAnalysis}</p>
-                <p><strong>AI Konklusion (Top til toe):</strong> Dine splits viser en god jævn rytme kilometer for kilometer. Sørg for at prioritere søvn og væske, så kroppen er 100% klar til næste træningspas på stierne!</p>
+                <p><strong>Historisk Sammenligning (baseret på dine ${count} seneste aktiviteter):</strong></p>
+                <p>📊 <strong>Tempo-analyse:</strong> ${paceComparisonText}</p>
+                <p>❤️ <strong>Puls-analyse:</strong> ${hrComparisonText}</p>
+                <p>🎯 <strong>MAF-Puls Vurdering (&lt; 155 bpm):</strong> ${mafBadge} Gennemsnit på ${curHr} bpm (${mafValid ? 'Godt inden for zonen' : 'Højere end målet'}).</p>
+                <p><strong>AI Konklusion (Top til toe):</strong> Historikken viser, at du holder en fast tråd i din træning. Sørg for at restituere ordentligt, så du er klar til næste udfordring!</p>
             `;
         }
 

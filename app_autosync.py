@@ -379,6 +379,15 @@ async def get_all_activities():
     conn.close()
     return [dict(row) for row in rows]
 
+# --- NYT HISTORIK ENDPOINT TIL AI ---
+@app.get("/api/activities/history")
+async def get_activities_history():
+    """Henter alle tidligere aktiviteter til historisk sammenligning i AI."""
+    conn = get_db_connection()
+    rows = conn.execute("SELECT * FROM activities ORDER BY date DESC LIMIT 30").fetchall()
+    conn.close()
+    return [dict(row) for row in rows]
+
 @app.get("/api/activity/{date_str}")
 async def get_activity_by_date(date_str: str):
     """Henter specifik aktivitet for en bestemt dato."""
