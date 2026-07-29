@@ -178,6 +178,7 @@
                 document.getElementById('actPace').textContent = formatPace(data.avg_pace_minutes);
                 document.getElementById('actHr').textContent = (data.avg_hr || '--') + ' bpm';
 
+                // Generér præcise splits
                 let generatedSplits = data.splits && data.splits.length > 0 ? data.splits : generateDynamicSplits(distNum, data.avg_pace_minutes, data.avg_hr);
                 
                 const tbody = document.getElementById('splitsTableBody');
@@ -186,6 +187,7 @@
                     tbody.innerHTML += `<tr><td><strong>${s.km}</strong></td><td>${s.pace} /km</td><td>${s.hr} bpm</td></tr>`;
                 });
 
+                // --- PULS GRAF MED MAF STREG PÅ 155 ---
                 const hrCtx = document.getElementById('hrChart').getContext('2d');
                 let hrValues = generatedSplits.map(s => s.hr);
                 let mafLineData = new Array(generatedSplits.length).fill(155);
@@ -212,6 +214,7 @@
                     options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: true } } }
                 });
 
+                // --- PACE GRAF MED MÅLSTREG PÅ 5:00 ---
                 const paceCtx = document.getElementById('paceChart').getContext('2d');
                 let paceValues = generatedSplits.map(s => {
                     let parts = s.pace.split(':');
