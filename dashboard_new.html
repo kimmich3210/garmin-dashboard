@@ -36,7 +36,7 @@
             margin: 0 auto;
         }
 
-        /* Header */
+        /* Header med levende grøn prik og dato */
         .garmin-header {
             display: flex; justify-content: space-between; align-items: center;
             background-color: var(--garmin-card); padding: 15px 25px;
@@ -50,6 +50,23 @@
         }
         .brand-title h1 { font-size: 1.2rem; color: #fff; font-weight: 600; }
         .brand-title p { font-size: 0.8rem; color: var(--garmin-text-muted); }
+
+        .live-date-badge {
+            display: inline-flex; align-items: center; gap: 8px;
+            font-size: 0.85rem; color: var(--garmin-text-muted); background: #12161f;
+            padding: 6px 12px; border-radius: 20px; border: 1px solid var(--garmin-border);
+        }
+        .live-dot {
+            width: 8px; height: 8px; background-color: var(--garmin-green);
+            border-radius: 50%; display: inline-block;
+            box-shadow: 0 0 8px var(--garmin-green);
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0% { transform: scale(0.95); opacity: 0.8; }
+            50% { transform: scale(1.2); opacity: 1; }
+            100% { transform: scale(0.95); opacity: 0.8; }
+        }
 
         /* Training Readiness Widget */
         .readiness-card {
@@ -100,7 +117,8 @@
             border: 1px solid var(--garmin-border); display: none;
         }
         .activity-detail-card.active { display: block; }
-        .strava-header { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+        .strava-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+        .strava-title-group { display: flex; align-items: center; gap: 10px; }
         .strava-icon { background: var(--strava-orange); color: #fff; font-weight: bold; padding: 4px 8px; border-radius: 4px; font-size: 0.8rem; }
         .strava-title { font-size: 1.1rem; font-weight: bold; color: #fff; }
         .strava-meta { font-size: 0.8rem; color: var(--garmin-text-muted); margin-bottom: 15px; }
@@ -110,6 +128,11 @@
         }
         .stat-box .label { font-size: 0.75rem; color: var(--garmin-text-muted); }
         .stat-box .value { font-size: 1.2rem; font-weight: bold; color: #fff; margin-top: 4px; }
+        .view-details-btn {
+            display: inline-block; background: var(--strava-orange); color: #fff; text-decoration: none;
+            padding: 8px 16px; border-radius: 4px; font-size: 0.85rem; font-weight: bold; transition: opacity 0.2s;
+        }
+        .view-details-btn:hover { opacity: 0.9; }
 
         /* Controls */
         .controls {
@@ -148,6 +171,10 @@
                     <p>Kim Brian Enhaynes Lungay | Mål: Pace &lt; 5:00 min/km</p>
                 </div>
             </div>
+            <div class="live-date-badge" id="todayDateBadge">
+                <span class="live-dot"></span>
+                <span id="dateText">Indlæser dato...</span>
+            </div>
         </header>
 
         <!-- Training Readiness -->
@@ -176,8 +203,11 @@
         <!-- Aktivitets Detalje boks (Viser når man klikker på en dag) -->
         <div class="activity-detail-card" id="activityDetailCard">
             <div class="strava-header">
-                <span class="strava-icon">STRAVA / GARMIN</span>
-                <span class="strava-title" id="detTitle">Vælg en dag i kalenderen</span>
+                <div class="strava-title-group">
+                    <span class="strava-icon">STRAVA</span>
+                    <span class="strava-title" id="detTitle">Vælg en dag i kalenderen</span>
+                </div>
+                <a id="detLinkBtn" href="#" class="view-details-btn" style="display: none;">Se fuld analyse →</a>
             </div>
             <div class="strava-meta" id="detMeta">Tryk på en dag med træning for at se splits, puls og data.</div>
             <div class="strava-stats-grid">
@@ -220,6 +250,11 @@
         let rhrChart, pace30Chart;
         let cachedActivities = [];
 
+        // Vis dags dato i headeren
+        const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+        const todayStr = new Date().toLocaleDateString('da-DK', options);
+        document.getElementById('dateText').textContent = todayStr.charAt(0).toUpperCase() + todayStr.slice(1);
+
         function formatPace(m) {
             if (!m) return '--';
             const mins = Math.floor(m), secs = Math.round((m - mins) * 60);
@@ -228,8 +263,6 @@
 
         async function loadReadiness() {
             try {
-                const todayFormatted = new Date().toLocaleDateString('da-DK', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
-                document.getElementById('readinessTitle').textContent = `Træningsparathed — ${todayFormatted}`;
                 const res = await fetch('/api/training/readiness');
                 const data = await res.json();
                 document.getElementById('readinessScore').textContent = `${data.score}%`;
@@ -293,6 +326,7 @@
         function showActivityDetails(dateStr) {
             const match = cachedActivities.find(a => a.date && a.date.startsWith(dateStr));
             const card = document.getElementById('activityDetailCard');
+            const linkBtn = document.getElementById('detLinkBtn');
             
             if (!match) {
                 card.classList.remove('active');
@@ -311,6 +345,9 @@
             document.getElementById('detTime').textContent = durationMin;
             document.getElementById('detPace').textContent = formatPace(match.avg_pace_minutes) + ' min/km';
             document.getElementById('detHr').textContent = (match.avg_hr || '--') + ' bpm';
+
+            linkBtn.style.display = 'inline-block';
+            linkBtn.href = `/activity?date=${dateStr}`;
         }
 
         async function loadSyncStatus() {
