@@ -146,7 +146,7 @@ class GarminSync:
         except:
             pass
 
-        # Hent SENESTE LØB uanset dato fra databasen (sorteret efter dato faldende)
+        # Hent KUN seneste ÆGTE LØB fra databasen
         recent_run_penalty = 0
         last_run_text = "Ingen løb fundet"
         latest_act = None
