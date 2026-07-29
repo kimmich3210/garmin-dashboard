@@ -357,28 +357,14 @@
             } catch (e) { console.error(e); }
         }
 
-        function getLocalStrengthWorkouts() {
-            try {
-                const data = localStorage.getItem('garmin_strength_workouts');
-                return data ? JSON.parse(data) : [];
-            } catch (e) {
-                return [];
-            }
-        }
-
-        function saveLocalStrengthWorkouts(workouts) {
-            try {
-                localStorage.setItem('garmin_strength_workouts', JSON.stringify(workouts));
-            } catch (e) {
-                console.error(e);
-            }
-        }
-
         async function loadCalendar() {
             try {
-                const resActs = await fetch('/api/activities/all');
+                const [resActs, resStrength] = await Promise.all([
+                    fetch('/api/activities/all'),
+                    fetch('/api/strength/all')
+                ]);
                 let rawActivities = await resActs.json();
-                let rawStrength = getLocalStrengthWorkouts();
+                let rawStrength = await resStrength.json();
 
                 const formattedStrength = rawStrength.map(s => ({
                     activity_id: s.activity_id,
@@ -447,37 +433,48 @@
             } catch (e) { console.error('Fejl ved indlæsning af kalender', e); }
         }
 
-        function saveStrengthFromModal(dateStr) {
+        async function saveStrengthFromModal(dateStr) {
             const ex1 = document.getElementById('modalEx1').value || '3x10';
             const ex2 = document.getElementById('modalEx2').value || '3x12';
             const ex3 = document.getElementById('modalEx3').value || '3x12';
             const ex4 = document.getElementById('modalEx4').value || '3x10';
 
-            let workouts = getLocalStrengthWorkouts();
-            workouts = workouts.filter(w => !w.date.startsWith(dateStr));
-
-            workouts.push({
-                activity_id: 'strength_' + dateStr,
+            const payload = {
                 date: `${dateStr}T12:00:00`,
                 exercises: { ex1, ex2, ex3, ex4 }
-            });
+            };
 
-            saveLocalStrengthWorkouts(workouts);
-            alert('Styrketræning gemt succesfuldt!');
-            closeModal();
-            loadCalendar();
+            try {
+                const res = await fetch('/api/strength/save', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const data = await res.json();
+                alert(data.message);
+                closeModal();
+                loadCalendar();
+                loadReadiness();
+            } catch (e) {
+                alert('Kunne ikke gemme: ' + e.message);
+            }
         }
 
-        function deleteStrengthFromModal(dateStr) {
+        async function deleteStrengthFromModal(dateStr) {
             if (!confirm(`Er du sikker på, at du vil slette styrketræningen for den ${dateStr}?`)) return;
 
-            let workouts = getLocalStrengthWorkouts();
-            workouts = workouts.filter(w => !w.date.startsWith(dateStr));
-            saveLocalStrengthWorkouts(workouts);
-
-            alert('Styrketræning slettet!');
-            closeModal();
-            loadCalendar();
+            try {
+                const res = await fetch(`/api/strength/delete/${dateStr}`, {
+                    method: 'DELETE'
+                });
+                const data = await res.json();
+                alert(data.message);
+                closeModal();
+                loadCalendar();
+                loadReadiness();
+            } catch (e) {
+                alert('Kunne ikke slette: ' + e.message);
+            }
         }
 
         function openActivityModal(dateStr) {
