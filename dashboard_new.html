@@ -3,79 +3,179 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Garmin Løbe & Puls Dashboard</title>
+    <title>Garmin Connect - Løbe & Puls Dashboard</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
+        :root {
+            --garmin-dark: #12161f;
+            --garmin-card: #1c2230;
+            --garmin-blue: #007acc;
+            --garmin-cyan: #00c1d6;
+            --garmin-text: #e2e8f0;
+            --garmin-text-muted: #94a3b8;
+            --garmin-border: #2a3447;
+            --garmin-green: #22c55e;
+            --garmin-red: #ef4444;
+        }
+
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-            background: #121212; color: #e0e0e0; min-height: 100vh; padding: 20px;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--garmin-dark);
+            color: var(--garmin-text);
+            min-height: 100vh;
+            padding: 20px;
         }
-        .header { text-align: center; margin-bottom: 30px; padding: 10px; }
-        .header h1 { font-size: 2.2rem; color: #fc4c02; margin-bottom: 8px; }
-        .header p { color: #888; font-size: 0.95rem; }
 
-        .controls {
-            display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;
-            background: #1e1e1e; padding: 15px 25px; border-radius: 8px;
-            margin: 0 auto 25px; max-width: 900px; border: 1px solid #333;
+        /* Garmin Top Header Bar */
+        .garmin-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background-color: var(--garmin-card);
+            padding: 15px 25px;
+            border-radius: 6px;
+            border-bottom: 3px solid var(--garmin-blue);
+            margin-bottom: 25px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.2);
         }
-        .sync-status { display: inline-flex; align-items: center; gap: 10px; }
-        .sync-indicator { width: 10px; height: 10px; border-radius: 50%; }
-        .sync-indicator.active { background: #4ade80; box-shadow: 0 0 8px #4ade80; }
-        .sync-indicator.inactive { background: #f87171; }
-        .sync-info { font-size: 0.85rem; color: #aaa; }
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .brand-logo {
+            font-weight: 800;
+            font-size: 1.5rem;
+            letter-spacing: 1px;
+            color: #fff;
+            background: var(--garmin-blue);
+            padding: 4px 10px;
+            border-radius: 4px;
+        }
+        .brand-title h1 { font-size: 1.2rem; color: #fff; font-weight: 600; }
+        .brand-title p { font-size: 0.8rem; color: var(--garmin-text-muted); }
+
+        /* Controls / Sync Bar */
+        .controls {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background-color: var(--garmin-card);
+            padding: 12px 20px;
+            border-radius: 6px;
+            margin-bottom: 25px;
+            border: 1px solid var(--garmin-border);
+        }
+        .sync-status { display: flex; align-items: center; gap: 10px; }
+        .sync-indicator { width: 9px; height: 9px; border-radius: 50%; }
+        .sync-indicator.active { background: var(--garmin-green); box-shadow: 0 0 8px var(--garmin-green); }
+        .sync-indicator.inactive { background: var(--garmin-red); }
+        .sync-info { font-size: 0.85rem; color: var(--garmin-text-muted); }
 
         .sync-btn {
-            background: #fc4c02; color: #fff; border: none;
-            padding: 8px 18px; border-radius: 6px; cursor: pointer; font-weight: 600;
-            font-size: 0.9rem; transition: background 0.2s;
+            background-color: var(--garmin-blue);
+            color: #fff;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 0.85rem;
+            transition: background 0.2s;
         }
-        .sync-btn:hover { background: #e34402; }
-        .sync-btn:disabled { background: #555; cursor: not-allowed; }
+        .sync-btn:hover { background-color: #005fa3; }
+        .sync-btn:disabled { background-color: #334155; cursor: not-allowed; }
 
-        .section { margin-bottom: 40px; max-width: 900px; margin-left: auto; margin-right: auto; }
-        .chart-container {
-            background: #1e1e1e; border-radius: 8px; padding: 20px; border: 1px solid #333;
-            margin-bottom: 25px; box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        /* Main Grid Layout */
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 20px;
+            max-width: 1000px;
+            margin: 0 auto;
         }
-        .chart-container h3 { color: #fff; margin-bottom: 15px; font-size: 1.1rem; }
-        .chart-wrapper { position: relative; height: 350px; }
+
+        .card {
+            background-color: var(--garmin-card);
+            border-radius: 6px;
+            padding: 20px;
+            border: 1px solid var(--garmin-border);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            border-bottom: 1px solid var(--garmin-border);
+            padding-bottom: 10px;
+        }
+        .card-header h3 {
+            font-size: 1rem;
+            color: #fff;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+        }
+        .chart-wrapper {
+            position: relative;
+            height: 320px;
+            width: 100%;
+        }
     </style>
 </head>
 <body>
-    <div class="header">
-        <h1>⚡ Garmin Træningshub</h1>
-        <p>Mål: Pace under 5:00 min/km | MAF Puls under 155 | 10+ km</p>
-    </div>
 
-    <div class="controls">
-        <div class="sync-status">
-            <div class="sync-indicator" id="syncIndicator"></div>
-            <div class="sync-info">
-                <div id="syncStatusText">Tjekker forbindelse...</div>
-                <div id="lastSyncText"></div>
+    <div class="dashboard-grid">
+        <!-- Garmin Header Bar -->
+        <header class="garmin-header">
+            <div class="brand">
+                <div class="brand-logo">GARMIN</div>
+                <div class="brand-title">
+                    <h1>Løbe & Puls Dashboard</h1>
+                    <p>Mål: Pace &lt; 5:00 min/km | MAF Puls &lt; 155 | 10+ km</p>
+                </div>
+            </div>
+        </header>
+
+        <!-- Sync Control Panel -->
+        <div class="controls">
+            <div class="sync-status">
+                <div class="sync-indicator" id="syncIndicator"></div>
+                <div class="sync-info">
+                    <div id="syncStatusText">Forbinder til Connect...</div>
+                    <div id="lastSyncText"></div>
+                </div>
+            </div>
+            <button class="sync-btn" id="syncBtn" onclick="triggerSync()">Synkroniser nu</button>
+        </div>
+
+        <!-- Pace Chart Card -->
+        <div class="card">
+            <div class="card-header">
+                <h3>LØBE-PACE (SIDSTE 30 DAGE)</h3>
+            </div>
+            <div class="chart-wrapper">
+                <canvas id="pace30Chart"></canvas>
             </div>
         </div>
-        <button class="sync-btn" id="syncBtn" onclick="triggerSync()">Synkroniser nu</button>
-    </div>
 
-    <!-- Charts Section -->
-    <div class="section">
-        <div class="chart-container">
-            <h3>📈 Løbe-Pace de sidste 30 dage (min/km)</h3>
-            <div class="chart-wrapper"><canvas id="pace30Chart"></canvas></div>
-        </div>
-
-        <div class="chart-container">
-            <h3>❤️ Hvilepuls (Sidste 14 Dage)</h3>
-            <div class="chart-wrapper"><canvas id="rhrChart"></canvas></div>
+        <!-- Resting Heart Rate Chart Card -->
+        <div class="card">
+            <div class="card-header">
+                <h3>HVILEPULS (SIDSTE 14 DAGE)</h3>
+            </div>
+            <div class="chart-wrapper">
+                <canvas id="rhrChart"></canvas>
+            </div>
         </div>
     </div>
 
     <script>
-        Chart.defaults.color = '#888';
-        Chart.defaults.borderColor = '#2a2a2a';
+        // Chart.js styling tilpasset Garmin Connect mørke tema
+        Chart.defaults.color = '#94a3b8';
+        Chart.defaults.borderColor = '#2a3447';
+        Chart.defaults.font.family = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
 
         let rhrChart, pace30Chart;
 
@@ -143,14 +243,15 @@
                     data: {
                         labels: data.map(d => `${d.date.split('T')[0]} (${d.title || 'Løb'})`),
                         datasets: [{
-                            label: 'Gennemsnitlig Pace (min/km)',
+                            label: 'Pace (min/km)',
                             data: data.map(d => d.avg_pace_min_km),
-                            borderColor: '#fc4c02',
-                            backgroundColor: 'rgba(252, 76, 2, 0.1)',
+                            borderColor: '#00c1d6', // Garmin Cyan farve
+                            backgroundColor: 'rgba(0, 193, 214, 0.08)',
                             fill: true,
-                            tension: 0.3,
-                            pointRadius: 4,
-                            pointBackgroundColor: '#fc4c02'
+                            tension: 0.2,
+                            borderWidth: 2,
+                            pointRadius: 3,
+                            pointBackgroundColor: '#00c1d6'
                         }]
                     },
                     options: {
@@ -159,14 +260,24 @@
                         scales: {
                             y: {
                                 reverse: true,
-                                title: { display: true, text: 'Pace (min/km)' },
+                                grid: { color: '#2a3447' },
+                                title: { display: true, text: 'Min/km', color: '#94a3b8' },
                                 ticks: { callback: v => formatPace(v) }
+                            },
+                            x: {
+                                grid: { display: false }
                             }
                         },
                         plugins: {
+                            legend: { display: false },
                             tooltip: {
+                                backgroundColor: '#1c2230',
+                                titleColor: '#fff',
+                                bodyColor: '#00c1d6',
+                                borderColor: '#2a3447',
+                                borderWidth: 1,
                                 callbacks: {
-                                    label: ctx => `Pace: ${formatPace(ctx.raw)} min/km`
+                                    label: ctx => ` Pace: ${formatPace(ctx.raw)} min/km`
                                 }
                             }
                         }
@@ -191,19 +302,40 @@
                         datasets: [{
                             label: 'Hvilepuls (bpm)',
                             data: data.map(d => d.resting_hr),
-                            borderColor: '#ff5858',
-                            backgroundColor: 'rgba(255, 88, 88, 0.1)',
+                            borderColor: '#ef4444', // Puls rød
+                            backgroundColor: 'rgba(239, 68, 68, 0.08)',
                             fill: true,
-                            tension: 0.3,
-                            pointRadius: 4,
-                            pointBackgroundColor: '#ff5858'
+                            tension: 0.2,
+                            borderWidth: 2,
+                            pointRadius: 3,
+                            pointBackgroundColor: '#ef4444'
                         }]
                     },
                     options: {
                         responsive: true,
                         maintainAspectRatio: false,
                         scales: {
-                            y: { beginAtZero: false, title: { display: true, text: 'BPM' } }
+                            y: {
+                                grid: { color: '#2a3447' },
+                                title: { display: true, text: 'BPM', color: '#94a3b8' },
+                                beginAtZero: false
+                            },
+                            x: {
+                                grid: { display: false }
+                            }
+                        },
+                        plugins: {
+                            legend: { display: false },
+                            tooltip: {
+                                backgroundColor: '#1c2230',
+                                titleColor: '#fff',
+                                bodyColor: '#ef4444',
+                                borderColor: '#2a3447',
+                                borderWidth: 1,
+                                callbacks: {
+                                    label: ctx => ` Hvilepuls: ${ctx.raw} bpm`
+                                }
+                            }
                         }
                     }
                 });
