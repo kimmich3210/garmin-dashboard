@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Aktivitetsdetaljer - Garmin Connect Athlete Intelligence</title>
+    <title>Aktivitetsdetaljer - Garmin Connect</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         :root {
@@ -50,34 +50,11 @@
 
         .section-title { font-size: 1.1rem; color: #fff; margin-bottom: 15px; border-bottom: 1px solid var(--garmin-border); padding-bottom: 8px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px; }
         
-        /* AI Knap & Boks */
-        .ai-btn-container { margin-bottom: 30px; }
-        .ai-btn {
-            background: linear-gradient(135deg, #007acc 0%, #00c1d6 100%);
-            color: #fff; border: none; width: 100%; padding: 16px; border-radius: 6px;
-            font-size: 1.05rem; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 12px;
-            box-shadow: 0 4px 20px rgba(0, 122, 204, 0.4); transition: transform 0.2s, opacity 0.2s;
-        }
-        .ai-btn:hover { transform: translateY(-2px); opacity: 0.95; }
-        
-        .ai-analysis-box {
-            background: #12161f; border: 1px solid var(--garmin-cyan); border-radius: 6px;
-            padding: 22px; margin-top: 15px; display: none; line-height: 1.6; font-size: 0.95rem;
-        }
-        .ai-analysis-box.active { display: block; }
-        .ai-analysis-box h4 { color: var(--garmin-cyan); margin-bottom: 12px; font-size: 1.15rem; display: flex; align-items: center; gap: 8px; }
-        .ai-analysis-box p { margin-bottom: 12px; color: var(--garmin-text); }
-        .ai-badge { display: inline-block; padding: 3px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: bold; margin-right: 5px; }
-        .ai-badge.success { background: rgba(34, 197, 94, 0.2); color: var(--garmin-green); }
-        .ai-badge.warning { background: rgba(239, 68, 68, 0.2); color: var(--garmin-red); }
-
-        /* Splits Tabel */
         .splits-table { width: 100%; border-collapse: collapse; margin-top: 10px; background: #12161f; border-radius: 6px; overflow: hidden; border: 1px solid var(--garmin-border); }
         .splits-table th, .splits-table td { padding: 12px 16px; text-align: left; font-size: 0.9rem; border-bottom: 1px solid var(--garmin-border); }
         .splits-table th { color: var(--garmin-text-muted); font-size: 0.8rem; text-transform: uppercase; background: #182232; }
         .splits-table tr:last-child td { border-bottom: none; }
 
-        /* Charts */
         .chart-container { position: relative; height: 260px; width: 100%; margin-top: 15px; }
     </style>
 </head>
@@ -99,43 +76,33 @@
                 <div class="stat-box"><div class="label">Puls (Gns)</div><div class="value" id="actHr">--</div></div>
             </div>
 
-            <!-- ATHLETE INTELLIGENCE KNAP -->
-            <div class="ai-btn-container">
-                <button class="ai-btn" onclick="runAIAnalysis()">
-                    <span>✨</span> Garmin Connect Athlete Intelligence — AI Analyse
-                </button>
-                <div class="ai-analysis-box" id="aiAnalysisBox">
-                    <h4><span>⚡</span> AI Træneranalyse</h4>
-                    <div id="aiContent">Henter ægte AI-analyse baseret på din træning...</div>
-                </div>
-            </div>
-
             <!-- SPLITS TABEL -->
             <div style="margin-bottom: 30px;">
-                <div class="section-title">Splits (Kilometer for kilometer)</div>
+                <div class="section-title">Omgange / Splits (Kilometer for kilometer)</div>
                 <table class="splits-table">
                     <thead>
                         <tr>
-                            <th>KM</th>
-                            <th>Pace</th>
+                            <th>Omgang</th>
+                            <th>Distance</th>
+                            <th>Tempo (Pace)</th>
                             <th>Gns. Puls</th>
                         </tr>
                     </thead>
                     <tbody id="splitsTableBody">
-                        <tr><td colspan="3" style="text-align:center; color:var(--garmin-text-muted);">Indlæser splits...</td></tr>
+                        <tr><td colspan="4" style="text-align:center; color:var(--garmin-text-muted);">Henter omgangstider fra Garmin Connect...</td></tr>
                     </tbody>
                 </table>
             </div>
 
-            <!-- PULS GRAF MED MAF STREG -->
+            <!-- PULS GRAF -->
             <div style="margin-bottom: 30px;">
-                <div class="section-title">Puls (Kilometer-overblik med MAF-loft 155 bpm)</div>
+                <div class="section-title">Puls pr. omgang (med MAF-loft 155 bpm)</div>
                 <div class="chart-container"><canvas id="hrChart"></canvas></div>
             </div>
 
-            <!-- PACE GRAF MED MÅLSTREG -->
+            <!-- PACE GRAF -->
             <div>
-                <div class="section-title">Pace (Kilometer-overblik med målstreg på 5:00 min/km)</div>
+                <div class="section-title">Tempo pr. omgang (med målstreg på 5:00 min/km)</div>
                 <div class="chart-container"><canvas id="paceChart"></canvas></div>
             </div>
         </div>
@@ -145,12 +112,11 @@
         Chart.defaults.color = '#94a3b8';
         Chart.defaults.borderColor = '#2a3447';
 
-        let currentActivityDateStr = '';
         let hrChartInstance = null;
         let paceChartInstance = null;
 
         function formatPace(m) {
-            if (!m || isNaN(m)) return '--:--';
+            if (!m || isNaN(m) || m <= 0) return '--:--';
             const mins = Math.floor(m), secs = Math.round((m - mins) * 60);
             return `${mins}:${secs.toString().padStart(2, '0')}`;
         }
@@ -158,7 +124,6 @@
         async function loadActivityDetail() {
             const urlParams = new URLSearchParams(window.location.search);
             const dateStr = urlParams.get('date');
-            currentActivityDateStr = dateStr;
             if (!dateStr) {
                 document.getElementById('actTitle').textContent = 'Ingen dato valgt';
                 return;
@@ -179,30 +144,34 @@
                 document.getElementById('actPace').textContent = formatPace(data.avg_pace_minutes) + ' min/km';
                 document.getElementById('actHr').textContent = (data.avg_hr || '--') + ' bpm';
 
-                // Hent splits, eller generér dem automatisk ud fra samlet distance, pace og puls hvis Garmin Connect mangler dem
-                let splits = data.splits && data.splits.length > 0 ? data.splits : generateFallbackSplits(distNum, data.avg_pace_minutes, data.avg_hr);
-                
+                let splits = data.splits || [];
                 const tbody = document.getElementById('splitsTableBody');
                 tbody.innerHTML = '';
 
-                splits.forEach((s, idx) => {
-                    const kmNum = s.km || (idx + 1);
-                    const paceVal = typeof s.pace === 'number' ? s.pace : parseFloat(s.pace) || data.avg_pace_minutes || 0;
-                    const paceStr = formatPace(paceVal);
-                    const hrVal = s.hr || s.avg_hr || data.avg_hr || '--';
-                    tbody.innerHTML += `<tr><td><strong>Km ${kmNum}</strong></td><td>${paceStr} min/km</td><td>${hrVal} bpm</td></tr>`;
+                if (splits.length === 0) {
+                    tbody.innerHTML = `<tr><td colspan="4" style="text-align:center; color:var(--garmin-text-muted);">Ingen omgangstider fundet for denne aktivitet.</td></tr>`;
+                    return;
+                }
+
+                splits.forEach(s => {
+                    tbody.innerHTML += `<tr>
+                        <td><strong>Km ${s.km}</strong></td>
+                        <td>${s.distance.toFixed(2)} km</td>
+                        <td>${formatPace(s.pace)} min/km</td>
+                        <td>${s.hr} bpm</td>
+                    </tr>`;
                 });
 
                 // --- PULS GRAF ---
                 const hrCtx = document.getElementById('hrChart').getContext('2d');
-                let hrValues = splits.map(s => s.hr || s.avg_hr || data.avg_hr || 0);
+                let hrValues = splits.map(s => s.hr);
                 let mafLineData = new Array(splits.length).fill(155);
 
                 if (hrChartInstance) hrChartInstance.destroy();
                 hrChartInstance = new Chart(hrCtx, {
                     type: 'line',
                     data: {
-                        labels: splits.map((s, idx) => `Km ${s.km || (idx + 1)}`),
+                        labels: splits.map(s => `Km ${s.km}`),
                         datasets: [
                             {
                                 label: 'Gns. Puls (bpm)',
@@ -223,20 +192,17 @@
 
                 // --- PACE GRAF ---
                 const paceCtx = document.getElementById('paceChart').getContext('2d');
-                let paceValues = splits.map(s => {
-                    if (typeof s.pace === 'number') return s.pace;
-                    return parseFloat(s.pace) || data.avg_pace_minutes || 0;
-                });
+                let paceValues = splits.map(s => s.pace);
                 let targetPaceLine = new Array(splits.length).fill(5.0);
 
                 if (paceChartInstance) paceChartInstance.destroy();
                 paceChartInstance = new Chart(paceCtx, {
                     type: 'line',
                     data: {
-                        labels: splits.map((s, idx) => `Km ${s.km || (idx + 1)}`),
+                        labels: splits.map(s => `Km ${s.km}`),
                         datasets: [
                             {
-                                label: 'Pace (min/km)',
+                                label: 'Tempo (min/km)',
                                 data: paceValues,
                                 borderColor: '#00c1d6', backgroundColor: 'rgba(0, 193, 214, 0.1)',
                                 fill: true, tension: 0.2, borderWidth: 2, pointRadius: 4
@@ -257,50 +223,7 @@
                 });
 
             } catch (e) {
-                document.getElementById('actTitle').textContent = 'Ingen træning fundet på denne dato';
-                document.getElementById('actMeta').textContent = '';
-            }
-        }
-
-        function generateFallbackSplits(totalKm, avgPace, avgHr) {
-            let splits = [];
-            let fullKm = Math.floor(totalKm);
-            let remainder = totalKm - fullKm;
-            let basePace = avgPace || 8.5;
-            let baseHr = avgHr || 148;
-
-            for (let i = 1; i <= fullKm; i++) {
-                splits.push({ km: i, pace: basePace, hr: baseHr });
-            }
-            if (remainder > 0.05) {
-                splits.push({ km: remainder.toFixed(2), pace: basePace, hr: baseHr });
-            }
-            return splits;
-        }
-
-        async function runAIAnalysis() {
-            const box = document.getElementById('aiAnalysisBox');
-            const content = document.getElementById('aiContent');
-            box.classList.add('active');
-            content.innerHTML = "Analyserende via Garmin Connect Athlete Intelligence...";
-
-            try {
-                const res = await fetch(`/api/ai/analyze/${currentActivityDateStr}`);
-                if (!res.ok) throw new Error('Kunne ikke hente AI-analyse');
-                const ai = await res.json();
-
-                let mafBadgeClass = ai.maf_status.includes('OPTIMAL') ? 'success' : 'warning';
-                let paceBadgeClass = ai.pace_status.includes('MÅL') ? 'success' : 'warning';
-
-                content.innerHTML = `
-                    <p><strong>Aktivitetsoverblik:</strong> ${ai.overview}</p>
-                    <p>📈 <strong>Udholdenhed & Historik:</strong> ${ai.dist_comment}</p>
-                    <p><strong>1. MAF-Puls Vurdering (&lt; 155 bpm):</strong> <span class="ai-badge ${mafBadgeClass}">${ai.maf_status}</span><br>${ai.maf_comment}</p>
-                    <p><strong>2. Pace & Målsætning (&lt; 5:00 min/km):</strong> <span class="ai-badge ${paceBadgeClass}">${ai.pace_status}</span><br>${ai.pace_comment}</p>
-                    <p><strong>AI Konklusion:</strong> ${ai.conclusion}</p>
-                `;
-            } catch (e) {
-                content.innerHTML = "Fejl ved generering af AI-analyse. Prøv igen senere.";
+                document.getElementById('actTitle').textContent = 'Fejl ved indlæsning af træning';
             }
         }
 

@@ -82,7 +82,6 @@ class GarminSync:
 
             for a in batch:
                 norm = self._normalize_activity(a)
-                # KUN ægte løbeture medtages (ingen gåture, gang el. lign.)
                 if norm["activity_type"] in ["running", "treadmill_running", "track_running"]:
                     try:
                         act_date = datetime.strptime(norm["date"].split("T")[0], "%Y-%m-%d")
@@ -116,7 +115,6 @@ class GarminSync:
         return rhr_data
 
     def fetch_training_readiness_comprehensive(self) -> dict:
-        """Kombinerer søvn, Body Battery, seneste løb, HRV, hvilepuls og døgnets stressniveau."""
         if not self.client:
             if not self.login():
                 return {"score": 75, "status": "Høj", "description": "Afventer forbindelse til Garmin Connect."}
@@ -146,7 +144,6 @@ class GarminSync:
         except:
             pass
 
-        # Hent SENESTE LØB uanset dato fra databasen (sorteret efter dato faldende)
         recent_run_penalty = 0
         last_run_text = "Ingen løb fundet"
         latest_act = None
@@ -172,11 +169,9 @@ class GarminSync:
             try:
                 run_date_str = latest_act["date"].split("T")[0]
                 run_date = datetime.strptime(run_date_str, "%Y-%m-%d")
-                
                 today_date = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
                 run_date_clean = run_date.replace(hour=0, minute=0, second=0, microsecond=0)
                 days_ago = (today_date - run_date_clean).days
-                
                 dist_km = (latest_act["distance"] or 0) / 1000
                 
                 if days_ago == 0:
@@ -191,35 +186,23 @@ class GarminSync:
             except Exception as e:
                 logger.error(f"Fejl ved behandling af seneste løb: {e}")
 
-        # Basis beregning ud fra Søvnscore og Body Battery
         score_parts = []
         if sleep_score is not None: score_parts.append(sleep_score * 0.5)
         if body_battery is not None: score_parts.append(body_battery * 0.5)
 
-        if score_parts:
-            score = int(sum(score_parts) / (len(score_parts) * 0.5) if len(score_parts) > 0 else 75)
-        else:
-            score = 75
-
+        score = int(sum(score_parts) / (len(score_parts) * 0.5) if len(score_parts) > 0 else 75)
         score -= recent_run_penalty
 
-        if hrv_status == 'UNBALANCED': 
-            score -= 12
-        elif hrv_status == 'BALANCED':
-            score += 5
-
-        if rhr and rhr > 60: 
-            score -= 8
+        if hrv_status == 'UNBALANCED': score -= 12
+        elif hrv_status == 'BALANCED': score += 5
+        if rhr and rhr > 60: score -= 8
 
         stress_text = "Stress: Ikke tilgængelig"
         if stress_avg is not None:
             stress_text = f"Stress: {stress_avg}"
-            if stress_avg > 40:
-                score -= 15
-            elif stress_avg > 25:
-                score -= 8
-            else:
-                score += 5
+            if stress_avg > 40: score -= 15
+            elif stress_avg > 25: score -= 8
+            else: score += 5
 
         score = max(1, min(100, score))
         status = "Høj" if score >= 70 else ("Moderat" if score >= 45 else "Lav")
@@ -231,9 +214,7 @@ class GarminSync:
         if hrv_status: desc_parts.append(f"HRV: {hrv_status}")
         desc_parts.append(stress_text)
 
-        description = " • ".join(desc_parts)
-
-        return {"score": score, "status": status, "description": description}
+        return {"score": score, "status": status, "description": " • ".join(desc_parts)}
 
     def _normalize_activity(self, raw: dict) -> dict:
         speed = raw.get("averageSpeed")
@@ -343,7 +324,7 @@ async def sync_status():
 @app.post("/api/sync/now")
 async def sync_now():
     await scheduled_sync()
-    return {"message": "Synkronisering gennemført (Kun løbeture medregnet)", "last_sync": datetime.now().isoformat()}
+    return {"message": "Synkronisering gennemført", "last_sync": datetime.now().isoformat()}
 
 @app.get("/api/health/resting-hr")
 async def get_resting_hr():
@@ -397,33 +378,31 @@ async def get_activity_by_date(date_str: str):
     activity_dict = dict(row)
     act_id = activity_dict.get("activity_id")
 
-    heart_rate_samples = []
+    splits = []
     if garmin_sync.client or garmin_sync.login():
         try:
-            details = garmin_sync.client.get_activity_details(act_id)
-            metrics = details.get("activityDetailMetrics", [])
-            hr_index = -1
-            time_index = -1
-            
-            descriptors = details.get("metricDescriptors", [])
-            for idx, desc in enumerate(descriptors):
-                key = desc.get("key", "")
-                if key == "directHeartRate" or key == "heartRate":
-                    hr_index = idx
-                elif key == "sumElapsedDuration" or key == "elapsedDuration" or key == "timestamp":
-                    time_index = idx
-
-            for m in metrics:
-                vals = m.get("metrics", [])
-                if hr_index != -1 and time_index != -1 and len(vals) > max(hr_index, time_index):
-                    t = vals[time_index]
-                    hr = vals[hr_index]
-                    if hr is not None and hr > 0:
-                        heart_rate_samples.append({"time": t, "hr": hr})
+            # Hent rigtige splits (laps) direkte fra Garmin Connect
+            laps_data = garmin_sync.client.get_activity_splits(act_id)
+            if laps_data and "lapDTOs" in laps_data:
+                for idx, lap in enumerate(laps_data["lapDTOs"]):
+                    lap_dist = lap.get("distance", 0) / 1000 # km
+                    lap_duration = lap.get("duration", 0) / 60 # minutter
+                    lap_speed = lap.get("averageSpeed", 0)
+                    lap_pace = (1000 / lap_speed / 60) if lap_speed and lap_speed > 0 else 0
+                    lap_hr = lap.get("averageHR", 0)
+                    
+                    if lap_dist > 0:
+                        splits.append({
+                            "km": idx + 1,
+                            "distance": lap_dist,
+                            "duration_minutes": lap_duration,
+                            "pace": lap_pace,
+                            "hr": int(lap_hr) if lap_hr else 0
+                        })
         except Exception as e:
-            logger.error(f"Kunne ikke hente pulskurve fra Garmin: {e}")
+            logger.error(f"Kunne ikke hente splits fra Garmin: {e}")
 
-    activity_dict["heart_rate_samples"] = heart_rate_samples
+    activity_dict["splits"] = splits
     return activity_dict
 
 @app.get("/activity", response_class=HTMLResponse)
