@@ -82,8 +82,7 @@ class GarminSync:
 
             for a in batch:
                 norm = self._normalize_activity(a)
-                # KUN ægte løbeture medtages (ingen gåture, gang el. lign.)
-                if norm["activity_type"] in ["running", "treadmill_running", "track_running"]:
+                if norm["distance"] > 0:
                     try:
                         act_date = datetime.strptime(norm["date"].split("T")[0], "%Y-%m-%d")
                         if act_date >= maf_start_date:
@@ -146,7 +145,7 @@ class GarminSync:
         except:
             pass
 
-        # Hent KUN seneste ÆGTE LØB fra databasen
+        # Hent seneste aktivitet fra databasen (og direkte fra Garmin API som fallback)
         recent_run_penalty = 0
         last_run_text = "Ingen løb fundet"
         latest_act = None
@@ -158,7 +157,6 @@ class GarminSync:
             row = cursor.execute("""
                 SELECT date, title, distance, duration_minutes 
                 FROM activities 
-                WHERE activity_type IN ('running', 'treadmill_running', 'track_running')
                 ORDER BY date DESC LIMIT 1
             """).fetchone()
             conn.close()
@@ -167,6 +165,15 @@ class GarminSync:
                 latest_act = {"date": row["date"], "distance": row["distance"]}
         except:
             pass
+
+        # Fallback direkte til Garmin API hvis databasen er tom
+        if not latest_act and self.client:
+            try:
+                batch = self.client.get_activities(0, 1)
+                if batch:
+                    latest_act = {"date": batch[0].get("startTimeLocal"), "distance": batch[0].get("distance", 0)}
+            except:
+                pass
 
         if latest_act:
             try:
@@ -343,7 +350,7 @@ async def sync_status():
 @app.post("/api/sync/now")
 async def sync_now():
     await scheduled_sync()
-    return {"message": "Synkronisering gennemført (Kun løbeture medregnet)", "last_sync": datetime.now().isoformat()}
+    return {"message": "Synkronisering gennemført og seneste løb opdateret", "last_sync": datetime.now().isoformat()}
 
 @app.get("/api/health/resting-hr")
 async def get_resting_hr():
@@ -358,8 +365,7 @@ async def get_running_pace_30days():
     rows = conn.execute("""
         SELECT date, title, distance, avg_pace_minutes as avg_pace_min_km, avg_hr, max_hr
         FROM activities
-        WHERE activity_type IN ('running', 'treadmill_running', 'track_running')
-          AND avg_pace_minutes IS NOT NULL 
+        WHERE avg_pace_minutes IS NOT NULL 
           AND avg_pace_minutes > 0
         ORDER BY date ASC
     """).fetchall()
@@ -373,26 +379,17 @@ async def get_training_readiness():
 @app.get("/api/activities/all")
 async def get_all_activities():
     conn = get_db_connection()
-    rows = conn.execute("""
-        SELECT * FROM activities 
-        WHERE activity_type IN ('running', 'treadmill_running', 'track_running')
-        ORDER BY date DESC
-    """).fetchall()
+    rows = conn.execute("SELECT * FROM activities ORDER BY date DESC").fetchall()
     conn.close()
     return [dict(row) for row in rows]
 
 @app.get("/api/activity/{date_str}")
 async def get_activity_by_date(date_str: str):
     conn = get_db_connection()
-    row = conn.execute("""
-        SELECT * FROM activities 
-        WHERE activity_type IN ('running', 'treadmill_running', 'track_running') 
-          AND date LIKE ? 
-        LIMIT 1
-    """, (f"{date_str}%",)).fetchone()
+    row = conn.execute("SELECT * FROM activities WHERE date LIKE ? LIMIT 1", (f"{date_str}%",)).fetchone()
     conn.close()
     if not row:
-        raise HTTPException(404, "Ingen løbetur fundet på denne dato")
+        raise HTTPException(404, "Ingen aktivitet fundet")
     
     activity_dict = dict(row)
     act_id = activity_dict.get("activity_id")
