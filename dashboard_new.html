@@ -51,7 +51,7 @@
         .brand-title h1 { font-size: 1.2rem; color: #fff; font-weight: 600; }
         .brand-title p { font-size: 0.8rem; color: var(--garmin-text-muted); }
 
-        /* Training Readiness Widget */
+        /* Training Readiness */
         .readiness-card {
             background-color: var(--garmin-card); border-radius: 6px; padding: 20px 25px;
             border: 1px solid var(--garmin-border); display: flex; align-items: center; justify-content: space-between;
@@ -93,23 +93,6 @@
             font-size: 0.65rem; background: rgba(252, 76, 2, 0.2); color: var(--strava-orange);
             padding: 2px 4px; border-radius: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left;
         }
-
-        /* Activity Detail Modal / View (Strava Style) */
-        .activity-detail-card {
-            background-color: var(--garmin-card); border-radius: 6px; padding: 20px;
-            border: 1px solid var(--garmin-border); display: none;
-        }
-        .activity-detail-card.active { display: block; }
-        .strava-header { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
-        .strava-icon { background: var(--strava-orange); color: #fff; font-weight: bold; padding: 4px 8px; border-radius: 4px; font-size: 0.8rem; }
-        .strava-title { font-size: 1.1rem; font-weight: bold; color: #fff; }
-        .strava-meta { font-size: 0.8rem; color: var(--garmin-text-muted); margin-bottom: 15px; }
-        .strava-stats-grid {
-            display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; background: #12161f;
-            padding: 15px; border-radius: 6px; margin-bottom: 15px; text-align: center;
-        }
-        .stat-box .label { font-size: 0.75rem; color: var(--garmin-text-muted); }
-        .stat-box .value { font-size: 1.2rem; font-weight: bold; color: #fff; margin-top: 4px; }
 
         /* Controls */
         .controls {
@@ -170,21 +153,6 @@
             </div>
             <div class="calendar-grid" id="calendarGrid">
                 <!-- Genereres via JS -->
-            </div>
-        </div>
-
-        <!-- Aktivitets Detalje boks (Viser når man klikker på en dag) -->
-        <div class="activity-detail-card" id="activityDetailCard">
-            <div class="strava-header">
-                <span class="strava-icon">STRAVA / GARMIN</span>
-                <span class="strava-title" id="detTitle">Vælg en dag i kalenderen</span>
-            </div>
-            <div class="strava-meta" id="detMeta">Tryk på en dag med træning for at se splits, puls og data.</div>
-            <div class="strava-stats-grid">
-                <div class="stat-box"><div class="label">DISTANCE</div><div class="value" id="detDist">-- km</div></div>
-                <div class="stat-box"><div class="label">TID</div><div class="value" id="detTime">--:--</div></div>
-                <div class="stat-box"><div class="label">PACE</div><div class="value" id="detPace">-- min/km</div></div>
-                <div class="stat-box"><div class="label">PULS</div><div class="value" id="detHr">-- bpm</div></div>
             </div>
         </div>
 
@@ -292,25 +260,13 @@
 
         function showActivityDetails(dateStr) {
             const match = cachedActivities.find(a => a.date && a.date.startsWith(dateStr));
-            const card = document.getElementById('activityDetailCard');
             
-            if (!match) {
-                card.classList.remove('active');
-                return;
+            if (match) {
+                // Sender dig direkte videre til den nye dedikerede side for denne dato
+                window.location.href = `/activity?date=${dateStr}`;
+            } else {
+                alert("Ingen træning registreret på denne dato.");
             }
-
-            card.classList.add('active');
-            document.getElementById('detTitle').textContent = match.title || 'Løbeaktivitet';
-            
-            const d = new Date(match.date);
-            document.getElementById('detMeta').textContent = `${d.toLocaleString('da-DK')} • Vallensbæk`;
-            
-            const distKm = match.distance ? (match.distance / 1000).toFixed(2) + ' km' : '-- km';
-            const durationMin = match.duration_minutes ? Math.floor(match.duration_minutes) + ' min' : '--';
-            document.getElementById('detDist').textContent = distKm;
-            document.getElementById('detTime').textContent = durationMin;
-            document.getElementById('detPace').textContent = formatPace(match.avg_pace_minutes) + ' min/km';
-            document.getElementById('detHr').textContent = (match.avg_hr || '--') + ' bpm';
         }
 
         async function loadSyncStatus() {
