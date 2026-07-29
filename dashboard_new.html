@@ -16,7 +16,6 @@
             --garmin-border: #2a3447;
             --garmin-green: #22c55e;
             --garmin-red: #ef4444;
-            --strava-orange: #fc4c02;
         }
 
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -36,7 +35,7 @@
             margin: 0 auto;
         }
 
-        /* Header med levende grøn prik og dato */
+        /* Header */
         .garmin-header {
             display: flex; justify-content: space-between; align-items: center;
             background-color: var(--garmin-card); padding: 15px 25px;
@@ -113,7 +112,7 @@
             padding: 2px 4px; border-radius: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left;
         }
 
-        /* Activity Detail Modal / View */
+        /* Activity Detail */
         .activity-detail-card {
             background-color: var(--garmin-card); border-radius: 6px; padding: 20px;
             border: 1px solid var(--garmin-border); display: none;
@@ -197,12 +196,10 @@
             <div class="calendar-header">
                 <h3 id="calendarMonthTitle">Træningskalender</h3>
             </div>
-            <div class="calendar-grid" id="calendarGrid">
-                <!-- Genereres via JS -->
-            </div>
+            <div class="calendar-grid" id="calendarGrid"></div>
         </div>
 
-        <!-- Aktivitets Detalje boks -->
+        <!-- Aktivitets Detalje -->
         <div class="activity-detail-card" id="activityDetailCard">
             <div class="strava-header">
                 <div class="strava-title-group">
@@ -262,6 +259,24 @@
             return `${mins}:${secs.toString().padStart(2, '0')}`;
         }
 
+        // MAF nummerering fra 13. juli 2026
+        function processMafTitles(activities) {
+            const sorted = [...activities].sort((a, b) => new Date(a.date) - new Date(b.date));
+            let mafCount = 1;
+            const mafStartDate = new Date('2026-07-13T00:00:00');
+
+            sorted.forEach(act => {
+                const actDate = new Date(act.date);
+                if (actDate >= mafStartDate) {
+                    act.displayTitle = `MAF ${mafCount}`;
+                    mafCount++;
+                } else {
+                    act.displayTitle = act.title || 'Løbetur';
+                }
+            });
+            return sorted;
+        }
+
         async function loadReadiness() {
             try {
                 const res = await fetch('/api/training/readiness');
@@ -276,10 +291,10 @@
         async function loadCalendar() {
             try {
                 const res = await fetch('/api/activities/all');
-                cachedActivities = await res.json();
+                let rawActivities = await res.json();
+                cachedActivities = processMafTitles(rawActivities);
                 
-                // Bruger fast Juli 2026 for at matche dine aktuelle data, eller dags dato
-                const now = new Date(2026, 6, 29); // 29. Juli 2026
+                const now = new Date();
                 const year = now.getFullYear();
                 const month = now.getMonth();
                 
@@ -287,7 +302,7 @@
                 document.getElementById('calendarMonthTitle').textContent = `Træningskalender — ${monthNames[month]} ${year}`;
 
                 const firstDay = new Date(year, month, 1).getDay();
-                const adjustedFirstDay = firstDay === 0 ? 6 : firstDay - 1; // Mandag start
+                const adjustedFirstDay = firstDay === 0 ? 6 : firstDay - 1;
                 const daysInMonth = new Date(year, month + 1, 0).getDate();
 
                 const grid = document.getElementById('calendarGrid');
@@ -304,8 +319,12 @@
                 for (let day = 1; day <= daysInMonth; day++) {
                     const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
                     
-                    // Matcher udelukkende løb på præcis denne dato
-                    const dayActivities = cachedActivities.filter(a => a.date && a.date.startsWith(dateStr));
+                    const dayActivities = cachedActivities.filter(a => {
+                        if (!a.date) return false;
+                        const actDate = new Date(a.date);
+                        const actDateStr = `${actDate.getFullYear()}-${String(actDate.getMonth() + 1).padStart(2, '0')}-${String(actDate.getDate()).padStart(2, '0')}`;
+                        return actDateStr === dateStr;
+                    });
 
                     let badgeHtml = '';
                     let cellClass = '';
@@ -313,7 +332,7 @@
                     if (dayActivities.length > 0) {
                         const act = dayActivities[0];
                         cellClass = 'is-running';
-                        badgeHtml = `<div class="cal-activity-badge running">${act.title}</div>`;
+                        badgeHtml = `<div class="cal-activity-badge running">${act.displayTitle}</div>`;
                     }
 
                     grid.innerHTML += `
@@ -327,7 +346,13 @@
         }
 
         function showActivityDetails(dateStr) {
-            const match = cachedActivities.find(a => a.date && a.date.startsWith(dateStr));
+            const match = cachedActivities.find(a => {
+                if (!a.date) return false;
+                const actDate = new Date(a.date);
+                const actDateStr = `${actDate.getFullYear()}-${String(actDate.getMonth() + 1).padStart(2, '0')}-${String(actDate.getDate()).padStart(2, '0')}`;
+                return actDateStr === dateStr;
+            });
+
             const card = document.getElementById('activityDetailCard');
             const linkBtn = document.getElementById('detLinkBtn');
             
@@ -337,7 +362,7 @@
             }
 
             card.classList.add('active');
-            document.getElementById('detTitle').textContent = match.title;
+            document.getElementById('detTitle').textContent = match.displayTitle;
             
             const d = new Date(match.date);
             document.getElementById('detMeta').textContent = `${d.toLocaleString('da-DK')} • Vallensbæk`;
@@ -375,7 +400,7 @@
 
         async function triggerSync() {
             const btn = document.getElementById('syncBtn');
-            btn.textContent = 'Synkroniserer...';
+            btn.textContent = 'Synkronisererer...';
             btn.disabled = true;
             try {
                 const res = await fetch('/api/sync/now', { method: 'POST' });
@@ -393,27 +418,53 @@
         async function loadPace30Chart() {
             try {
                 const res = await fetch('/api/running/pace-30days');
-                const data = await res.json();
+                let data = await res.json();
+                data = processMafTitles(data);
+                
                 const ctx = document.getElementById('pace30Chart').getContext('2d');
                 if (pace30Chart) pace30Chart.destroy();
                 pace30Chart = new Chart(ctx, {
                     type: 'line',
                     data: {
-                        labels: data.map(d => `${d.date.split('T')[0]} (${d.title})`),
+                        labels: data.map(d => `${d.date.split('T')[0]} (${d.displayTitle})`),
                         datasets: [{
                             label: 'Pace (min/km)',
                             data: data.map(d => d.avg_pace_min_km),
-                            borderColor: '#ef4444', backgroundColor: 'rgba(239, 68, 68, 0.08)',
-                            fill: true, tension: 0.2, borderWidth: 2, pointRadius: 3, pointBackgroundColor: '#ef4444'
+                            borderColor: '#ef4444', 
+                            backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                            fill: true, 
+                            tension: 0.3, // Gør kurven blød og pæn
+                            borderWidth: 3, 
+                            pointRadius: 5, 
+                            pointBackgroundColor: '#ef4444',
+                            pointBorderColor: '#fff',
+                            pointBorderWidth: 2
                         }]
                     },
                     options: {
-                        responsive: true, maintainAspectRatio: false,
+                        responsive: true, 
+                        maintainAspectRatio: false,
                         scales: {
-                            y: { reverse: true, grid: { color: '#2a3447' }, title: { display: true, text: 'Min/km', color: '#94a3b8' }, ticks: { callback: v => formatPace(v) } },
-                            x: { grid: { display: false } }
+                            y: { 
+                                reverse: true, // Omvendt Y-akse så hurtigere pace (lavere min/km) er øverst
+                                grid: { color: '#2a3447' }, 
+                                title: { display: true, text: 'Tempo (Min/km)', color: '#94a3b8' }, 
+                                ticks: { callback: v => formatPace(v) } 
+                            },
+                            x: { 
+                                grid: { display: false },
+                                ticks: { color: '#94a3b8' }
+                            }
                         },
-                        plugins: { legend: { display: false } }
+                        plugins: { 
+                            legend: { display: false },
+                            tooltip: {
+                                callbacks: {
+                                    title: (items) => items[0].label,
+                                    label: (item) => ` Pace: ${formatPace(item.raw)} min/km`
+                                }
+                            }
+                        }
                     }
                 });
             } catch (e) { console.error(e); }
