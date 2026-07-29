@@ -85,7 +85,7 @@
             border: 3px solid var(--garmin-cyan); font-weight: bold; font-size: 1.2rem; color: #fff;
         }
 
-        /* Calendar Section (Strava Style) */
+        /* Calendar Section */
         .calendar-card {
             background-color: var(--garmin-card); border-radius: 6px; padding: 20px;
             border: 1px solid var(--garmin-border);
@@ -104,10 +104,19 @@
             cursor: pointer; transition: border-color 0.2s;
         }
         .cal-cell:hover { border-color: var(--garmin-cyan); }
-        .cal-cell.has-activity { border-left: 3px solid var(--strava-orange); background: #182232; }
+        
+        /* Dynamiske farver til kalender-celler */
+        .cal-cell.is-running { border-left: 3px solid var(--garmin-red); background: rgba(239, 68, 68, 0.08); }
+        .cal-cell.is-walking { border-left: 3px solid var(--garmin-green); background: rgba(34, 197, 94, 0.08); }
+
         .cal-date { font-size: 0.75rem; color: var(--garmin-text-muted); text-align: left; }
-        .cal-activity-badge {
-            font-size: 0.65rem; background: rgba(252, 76, 2, 0.2); color: var(--strava-orange);
+        
+        .cal-activity-badge.running {
+            font-size: 0.65rem; background: rgba(239, 68, 68, 0.2); color: var(--garmin-red);
+            padding: 2px 4px; border-radius: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left;
+        }
+        .cal-activity-badge.walking {
+            font-size: 0.65rem; background: rgba(34, 197, 94, 0.2); color: var(--garmin-green);
             padding: 2px 4px; border-radius: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left;
         }
 
@@ -204,7 +213,7 @@
         <div class="activity-detail-card" id="activityDetailCard">
             <div class="strava-header">
                 <div class="strava-title-group">
-                    <span class="strava-icon">STRAVA</span>
+                    <span class="strava-icon">GARMIN</span>
                     <span class="strava-title" id="detTitle">Vælg en dag i kalenderen</span>
                 </div>
                 <a id="detLinkBtn" href="#" class="view-details-btn" style="display: none;">Se fuld analyse →</a>
@@ -280,7 +289,7 @@
                 const year = now.getFullYear();
                 const month = now.getMonth();
                 
-                const monthNames = ["Januar", "Februar", "Marts", "April", "Maj", "Juni", "Juli", "August", "September", "Oktober", "November", "Dezember"];
+                const monthNames = ["Januar", "Februar", "Marts", "April", "Maj", "Juni", "Juli", "August", "September", "Oktober", "November", "December"];
                 document.getElementById('calendarMonthTitle').textContent = `Træningskalender — ${monthNames[month]} ${year}`;
 
                 const firstDay = new Date(year, month, 1).getDay();
@@ -300,19 +309,28 @@
 
                 for (let day = 1; day <= daysInMonth; day++) {
                     const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-                    
-                    // Matcher datoer uanset tidszoner (tjekker om datoen indeholder YYYY-MM-DD)
                     const dayActivities = cachedActivities.filter(a => a.date && a.date.includes(dateStr));
 
                     let badgeHtml = '';
-                    let hasActClass = '';
+                    let cellClass = '';
+
                     if (dayActivities.length > 0) {
-                        hasActClass = 'has-activity';
-                        badgeHtml = `<div class="cal-activity-badge">${dayActivities[0].title || 'Løb'}</div>`;
+                        const act = dayActivities[0];
+                        const actType = (act.activity_type || '').toLowerCase();
+                        const actTitle = (act.title || 'Aktivitet');
+
+                        // Tjek om det er gang (walking) eller løb (running)
+                        if (actType.includes('walk') || actTitle.toLowerCase().includes('gang') || actTitle.toLowerCase().includes('gå')) {
+                            cellClass = 'is-walking';
+                            badgeHtml = `<div class="cal-activity-badge walking">${actTitle}</div>`;
+                        } else {
+                            cellClass = 'is-running';
+                            badgeHtml = `<div class="cal-activity-badge running">${actTitle}</div>`;
+                        }
                     }
 
                     grid.innerHTML += `
-                        <div class="cal-cell ${hasActClass}" onclick="showActivityDetails('${dateStr}')">
+                        <div class="cal-cell ${cellClass}" onclick="showActivityDetails('${dateStr}')">
                             <div class="cal-date">${day}</div>
                             ${badgeHtml}
                         </div>
