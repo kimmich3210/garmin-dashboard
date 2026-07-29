@@ -82,7 +82,7 @@ class GarminSync:
 
             for a in batch:
                 norm = self._normalize_activity(a)
-                if norm["activity_type"] in ["running", "treadmill_running", "track_running"]:
+                if norm["distance"] > 0: # Inkluder alt med distance
                     try:
                         act_date = datetime.strptime(norm["date"].split("T")[0], "%Y-%m-%d")
                         if act_date >= maf_start_date:
@@ -115,6 +115,7 @@ class GarminSync:
         return rhr_data
 
     def fetch_training_readiness_comprehensive(self) -> dict:
+        """Kombinerer søvn, Body Battery, seneste løb, HRV, hvilepuls og døgnets stressniveau."""
         if not self.client:
             if not self.login():
                 return {"score": 75, "status": "Høj", "description": "Afventer forbindelse til Garmin Connect."}
@@ -144,8 +145,9 @@ class GarminSync:
         except:
             pass
 
+        # 1. Hent absolut seneste aktivitet fra databasen uanset type
         recent_run_penalty = 0
-        last_run_text = "Ingen nyere løb"
+        last_run_text = "Ingen løb fundet"
         try:
             conn = sqlite3.connect(DB_PATH)
             conn.row_factory = sqlite3.Row
@@ -153,28 +155,34 @@ class GarminSync:
             row = cursor.execute("""
                 SELECT date, title, distance, duration_minutes 
                 FROM activities 
-                WHERE activity_type IN ('running', 'treadmill_running', 'track_running') 
                 ORDER BY date DESC LIMIT 1
             """).fetchone()
             conn.close()
 
             if row:
-                run_date = datetime.strptime(row["date"].split("T")[0], "%Y-%m-%d")
-                days_ago = (datetime.now() - run_date).days
+                run_date_str = row["date"].split("T")[0]
+                run_date = datetime.strptime(run_date_str, "%Y-%m-%d")
+                
+                # Beregn forskel i dage uafhængigt af tidszone
+                today_date = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+                run_date_clean = run_date.replace(hour=0, minute=0, second=0, microsecond=0)
+                days_ago = (today_date - run_date_clean).days
+                
                 dist_km = (row["distance"] or 0) / 1000
                 
                 if days_ago == 0:
                     recent_run_penalty = int(dist_km * 1.5)
-                    last_run_text = f"Løbet i dag ({dist_km:.1f} km)"
+                    last_run_text = f"Sidste løb: I dag ({dist_km:.1f} km)"
                 elif days_ago == 1:
                     recent_run_penalty = int(dist_km * 0.8)
-                    last_run_text = f"Seneste løb i går ({dist_km:.1f} km)"
-                elif days_ago <= 2:
-                    recent_run_penalty = int(dist_km * 0.3)
-                    last_run_text = f"Seneste løb for {days_ago} dage siden ({dist_km:.1f} km)"
-        except:
-            pass
+                    last_run_text = f"Sidste løb: I går ({dist_km:.1f} km)"
+                else:
+                    recent_run_penalty = max(0, int(dist_km * (0.5 / max(1, days_ago))))
+                    last_run_text = f"Sidste løb: For {days_ago} dage siden ({dist_km:.1f} km)"
+        except Exception as e:
+            logger.error(f"Fejl ved hentning af seneste løb: {e}")
 
+        # 2. Basis beregning ud fra Søvnscore og Body Battery
         score_parts = []
         if sleep_score is not None: score_parts.append(sleep_score * 0.5)
         if body_battery is not None: score_parts.append(body_battery * 0.5)
@@ -184,23 +192,34 @@ class GarminSync:
         else:
             score = 75
 
+        # 3. Træk fra for træningsbelastning
         score -= recent_run_penalty
 
-        if hrv_status == 'UNBALANCED': score -= 12
-        elif hrv_status == 'BALANCED': score += 5
+        # 4. Justeringer for HRV-status
+        if hrv_status == 'UNBALANCED': 
+            score -= 12
+        elif hrv_status == 'BALANCED':
+            score += 5
 
-        if rhr and rhr > 60: score -= 8
+        # 5. Justeringer for hvilepuls
+        if rhr and rhr > 60: 
+            score -= 8
 
+        # 6. Justeringer for døgnets gennemsnitlige stressniveau
         stress_text = "Stress: Ikke tilgængelig"
         if stress_avg is not None:
             stress_text = f"Stress: {stress_avg}"
-            if stress_avg > 40: score -= 15
-            elif stress_avg > 25: score -= 8
-            else: score += 5
+            if stress_avg > 40:
+                score -= 15
+            elif stress_avg > 25:
+                score -= 8
+            else:
+                score += 5
 
         score = max(1, min(100, score))
         status = "Høj" if score >= 70 else ("Moderat" if score >= 45 else "Lav")
         
+        # Saml beskrivelsen til dashboardet
         desc_parts = []
         if body_battery is not None: desc_parts.append(f"BB: {body_battery}")
         if sleep_score is not None: desc_parts.append(f"Søvn: {sleep_score}/100")
@@ -209,6 +228,7 @@ class GarminSync:
         desc_parts.append(stress_text)
 
         description = " • ".join(desc_parts)
+
         return {"score": score, "status": status, "description": description}
 
     def _normalize_activity(self, raw: dict) -> dict:
@@ -217,9 +237,15 @@ class GarminSync:
         duration_sec = raw.get("duration")
         duration_mins = (duration_sec / 60) if duration_sec else 0
 
+        act_type = "running"
+        try:
+            act_type = raw.get("activityType", {}).get("typeKey", "running")
+        except:
+            pass
+
         return {
             "activity_id": str(raw.get("activityId", "")),
-            "activity_type": raw.get("activityType", {}).get("typeKey", "running"),
+            "activity_type": act_type,
             "date": raw.get("startTimeLocal"),
             "title": raw.get("activityName", "Løbetur"),
             "distance": raw.get("distance", 0),
@@ -313,7 +339,7 @@ async def sync_status():
 @app.post("/api/sync/now")
 async def sync_now():
     await scheduled_sync()
-    return {"message": "Synkronisering gennemført", "last_sync": datetime.now().isoformat()}
+    return {"message": "Synkronisering gennemført og seneste løb opdateret", "last_sync": datetime.now().isoformat()}
 
 @app.get("/api/health/resting-hr")
 async def get_resting_hr():
@@ -328,11 +354,10 @@ async def get_running_pace_30days():
     rows = conn.execute("""
         SELECT date, title, distance, avg_pace_minutes as avg_pace_min_km, avg_hr, max_hr
         FROM activities
-        WHERE activity_type IN ('running', 'treadmill_running', 'track_running')
-          AND avg_pace_minutes IS NOT NULL 
+        WHERE avg_pace_minutes IS NOT NULL 
           AND avg_pace_minutes > 0
         ORDER BY date ASC
-    """></fetchall>
+    """).fetchall()
     conn.close()
     return [dict(row) for row in rows]
 
@@ -343,7 +368,7 @@ async def get_training_readiness():
 @app.get("/api/activities/all")
 async def get_all_activities():
     conn = get_db_connection()
-    rows = conn.execute("SELECT * FROM activities WHERE activity_type IN ('running', 'treadmill_running', 'track_running') ORDER BY date DESC").fetchall()
+    rows = conn.execute("SELECT * FROM activities ORDER BY date DESC").fetchall()
     conn.close()
     return [dict(row) for row in rows]
 
@@ -358,12 +383,10 @@ async def get_activity_by_date(date_str: str):
     activity_dict = dict(row)
     act_id = activity_dict.get("activity_id")
 
-    # Hent detaljerede tidsserier (pulskurve sekund for sekund) direkte fra Garmin Connect
     heart_rate_samples = []
     if garmin_sync.client or garmin_sync.login():
         try:
             details = garmin_sync.client.get_activity_details(act_id)
-            # Garmin returnerer typisk "metricDescriptors" og "activityDetailMetrics"
             metrics = details.get("activityDetailMetrics", [])
             hr_index = -1
             time_index = -1
