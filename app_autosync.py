@@ -193,7 +193,7 @@ class GarminSync:
             strength_row = cursor.execute("""
                 SELECT date, 'Styrketræning' as title, 0 as distance, 0 as duration_minutes, 'strength' as type
                 FROM strength_workouts
-                ORDER BY date DESC LIMIT 1
+                ORDER BY datetime(date) DESC LIMIT 1
             """).fetchone()
             
             conn.close()
@@ -215,29 +215,31 @@ class GarminSync:
             try:
                 act_date_str = latest_act["date"].split("T")[0]
                 act_date = datetime.strptime(act_date_str, "%Y-%m-%d")
-                today_date = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
-                days_ago = (today_date - act_date.replace(hour=0, minute=0, second=0, microsecond=0)).days
+                today_date = datetime.strptime(today_str, "%Y-%m-%d")
+                
+                # Præcis beregning af dage imellem dags dato og aktivitetsdato
+                days_ago = (today_date - act_date).days
                 
                 if latest_act["type"] == "strength":
-                    if days_ago == 0:
-                        recent_penalty = 8
+                    if days_ago <= 0:
+                        recent_penalty = 12
                         last_activity_text = "Sidste træning: Styrketræning i dag"
                     elif days_ago == 1:
-                        recent_penalty = 4
+                        recent_penalty = 7
                         last_activity_text = "Sidste træning: Styrketræning i går"
                     else:
-                        recent_penalty = max(0, int(6 / max(1, days_ago)))
+                        recent_penalty = max(0, int(8 / days_ago))
                         last_activity_text = f"Sidste træning: Styrketræning for {days_ago} dage siden"
                 else:
                     dist_km = (latest_act["distance"] or 0) / 1000
-                    if days_ago == 0:
+                    if days_ago <= 0:
                         recent_penalty = int(dist_km * 1.5)
                         last_activity_text = f"Sidste løb: I dag ({dist_km:.1f} km)"
                     elif days_ago == 1:
                         recent_penalty = int(dist_km * 0.8)
                         last_activity_text = f"Sidste løb: I går ({dist_km:.1f} km)"
                     else:
-                        recent_penalty = max(0, int(dist_km * (0.5 / max(1, days_ago))))
+                        recent_penalty = max(0, int(dist_km * (0.5 / days_ago)))
                         last_activity_text = f"Sidste løb: For {days_ago} dage siden ({dist_km:.1f} km)"
             except Exception as e:
                 logger.error(f"Fejl ved udregning af straf: {e}")
