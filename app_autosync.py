@@ -1,6 +1,5 @@
 """
-Garmin Workout Dashboard - Auto-Sync Version
-Automatically syncs data from Garmin Connect on a schedule.
+Garmin Workout Dashboard - Pure Running Version
 """
 
 from fastapi import FastAPI, HTTPException
@@ -191,7 +190,7 @@ class GarminSync:
             conn.close()
 
             if run_row:
-                latest_act = run_row
+                latest_act = dict(run_row)
         except Exception as e:
             logger.error(f"Fejl ved hentning af seneste aktivitet: {e}")
 

@@ -304,7 +304,7 @@
 
         <!-- Grafer -->
         <div class="card">
-            <div class="card-header"><h3>LØBE-PACE (HVER 30 DAG / MAF FRA 13. JULI)</h3></div>
+            <div class="card-header"><h3>MAF-UDVIKLING (PACE & PULS FRA 13. JULI)</h3></div>
             <div class="chart-wrapper"><canvas id="pace30Chart"></canvas></div>
         </div>
 
@@ -381,7 +381,6 @@
                 const res = await fetch('/api/training/readiness');
                 let data = await res.json();
 
-                // Justér træningsparatheden hvis der er lavet styrketræning i dag eller i går
                 const localStrength = JSON.parse(localStorage.getItem('strength_workouts') || '[]');
                 const today = new Date();
                 
@@ -487,17 +486,11 @@
                 activity_type: 'strength',
                 date: `${selectedDateVal}T12:00:00`,
                 title: 'Styrketræning',
-                exercises: {
-                    ex1: ex1,
-                    ex2: ex2,
-                    ex3: ex3,
-                    ex4: ex4
-                },
+                exercises: { ex1: ex1, ex2: ex2, ex3: ex3, ex4: ex4 },
                 displayTitle: 'Styrketræning'
             };
 
             let localStrength = JSON.parse(localStorage.getItem('strength_workouts') || '[]');
-            // Fjern evt. eksisterende styrke for samme dato for at undgå dubletter
             localStrength = localStrength.filter(s => !s.date.startsWith(selectedDateVal));
             localStrength.push(newStrength);
             localStorage.setItem('strength_workouts', JSON.stringify(localStrength));
@@ -604,16 +597,12 @@
 
         async function loadPace30Chart() {
             try {
-                const res = await fetch('/api/running/pace-30days');
+                const res = await fetch('/api/maf/progress');
                 let rawData = await res.json();
                 let processed = processMafTitles(rawData);
                 
                 const mafStartDate = new Date('2026-07-13T00:00:00');
                 let filteredData = processed.filter(d => new Date(d.date) >= mafStartDate);
-
-                const thirtyDaysAgo = new Date();
-                thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-                filteredData = filteredData.filter(d => new Date(d.date) >= thirtyDaysAgo);
 
                 const ctx = document.getElementById('pace30Chart').getContext('2d');
                 if (pace30Chart) pace30Chart.destroy();
@@ -621,30 +610,54 @@
                 pace30Chart = new Chart(ctx, {
                     type: 'line',
                     data: {
-                        labels: filteredData.map(d => d.displayTitle),
-                        datasets: [{
-                            label: 'Pace (min/km)',
-                            data: filteredData.map(d => d.avg_pace_min_km),
-                            borderColor: '#ef4444', 
-                            backgroundColor: 'rgba(239, 68, 68, 0.1)',
-                            fill: true, 
-                            tension: 0.3,
-                            borderWidth: 3, 
-                            pointRadius: 6, 
-                            pointBackgroundColor: '#ef4444',
-                            pointBorderColor: '#fff',
-                            pointBorderWidth: 2
-                        }]
+                        labels: filteredData.map(d => d.title || d.displayTitle),
+                        datasets: [
+                            {
+                                label: 'Pace (min/km)',
+                                data: filteredData.map(d => d.avg_pace),
+                                borderColor: '#00c1d6',
+                                backgroundColor: 'rgba(0, 193, 214, 0.1)',
+                                yAxisID: 'y-pace',
+                                tension: 0.2,
+                                borderWidth: 3,
+                                pointRadius: 5,
+                                pointBackgroundColor: '#00c1d6'
+                            },
+                            {
+                                label: 'Gns. Puls (bpm)',
+                                data: filteredData.map(d => d.avg_hr),
+                                borderColor: '#ef4444',
+                                backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                                yAxisID: 'y-puls',
+                                tension: 0.2,
+                                borderWidth: 3,
+                                pointRadius: 5,
+                                pointBackgroundColor: '#ef4444'
+                            }
+                        ]
                     },
                     options: {
                         responsive: true, 
                         maintainAspectRatio: false,
+                        interaction: {
+                            mode: 'index',
+                            intersect: false,
+                        },
                         scales: {
-                            y: { 
+                            'y-pace': { 
+                                type: 'linear',
+                                position: 'left',
                                 reverse: true, 
                                 grid: { color: '#2a3447' }, 
-                                title: { display: true, text: 'Tempo (Min/km)', color: '#94a3b8' }, 
-                                ticks: { callback: v => formatPace(v) } 
+                                title: { display: true, text: 'Tempo (Min/km)', color: '#00c1d6' }, 
+                                ticks: { callback: v => formatPace(v), color: '#00c1d6' } 
+                            },
+                            'y-puls': {
+                                type: 'linear',
+                                position: 'right',
+                                grid: { drawOnChartArea: false },
+                                title: { display: true, text: 'Puls (BPM)', color: '#ef4444' },
+                                ticks: { color: '#ef4444' }
                             },
                             x: { 
                                 grid: { display: false },
@@ -652,11 +665,20 @@
                             }
                         },
                         plugins: { 
-                            legend: { display: false },
+                            legend: { 
+                                display: true,
+                                labels: { color: '#e2e8f0' }
+                            },
                             tooltip: {
                                 callbacks: {
                                     title: (items) => items[0].label,
-                                    label: (item) => ` Pace: ${formatPace(item.raw)} min/km`
+                                    label: (item) => {
+                                        if (item.dataset.yAxisID === 'y-pace') {
+                                            return ` Pace: ${formatPace(item.raw)} min/km`;
+                                        } else {
+                                            return ` Puls: ${item.raw} bpm`;
+                                        }
+                                    }
                                 }
                             }
                         }
