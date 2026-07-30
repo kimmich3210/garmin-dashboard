@@ -2,7 +2,7 @@
 <html lang="da">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Garmin Connect - Løbe & Puls Dashboard</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
@@ -19,52 +19,43 @@
         }
 
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        
-        html, body {
-            width: 100%;
-            overflow-x: hidden;
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
             background-color: var(--garmin-dark);
             color: var(--garmin-text);
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
             min-height: 100vh;
-            padding: 8px;
+            padding: 10px;
         }
 
         .dashboard-grid {
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-            width: 100%;
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 15px;
             max-width: 1000px;
             margin: 0 auto;
         }
 
         .garmin-header {
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-            background-color: var(--garmin-card);
-            padding: 12px;
-            border-radius: 8px;
-            border-bottom: 3px solid var(--garmin-blue);
+            display: flex; flex-direction: column; gap: 10px;
+            background-color: var(--garmin-card); padding: 15px;
+            border-radius: 8px; border-bottom: 3px solid var(--garmin-blue);
             box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.2);
-            width: 100%;
         }
         @media (min-width: 600px) {
             .garmin-header { flex-direction: row; justify-content: space-between; align-items: center; padding: 15px 25px; }
         }
         .brand { display: flex; align-items: center; gap: 12px; }
         .brand-logo {
-            font-weight: 800; font-size: 1.2rem; letter-spacing: 1px; color: #fff;
-            background: var(--garmin-blue); padding: 4px 8px; border-radius: 4px;
+            font-weight: 800; font-size: 1.3rem; letter-spacing: 1px; color: #fff;
+            background: var(--garmin-blue); padding: 4px 10px; border-radius: 4px;
         }
-        .brand-title h1 { font-size: 1rem; color: #fff; font-weight: 600; }
+        .brand-title h1 { font-size: 1.05rem; color: #fff; font-weight: 600; }
         .brand-title p { font-size: 0.75rem; color: var(--garmin-text-muted); }
 
         .live-date-badge {
             display: inline-flex; align-items: center; gap: 8px;
-            font-size: 0.75rem; color: var(--garmin-text-muted); background: #12161f;
-            padding: 5px 10px; border-radius: 20px; border: 1px solid var(--garmin-border);
+            font-size: 0.8rem; color: var(--garmin-text-muted); background: #12161f;
+            padding: 6px 12px; border-radius: 20px; border: 1px solid var(--garmin-border);
             align-self: flex-start;
         }
         @media (min-width: 600px) { .live-date-badge { align-self: auto; } }
@@ -82,145 +73,159 @@
         }
 
         .readiness-card {
-            background-color: var(--garmin-card); border-radius: 8px; padding: 12px;
+            background-color: var(--garmin-card); border-radius: 8px; padding: 15px;
             border: 1px solid var(--garmin-border); display: flex; align-items: center; justify-content: space-between;
-            width: 100%;
         }
-        .readiness-left h3 { font-size: 0.75rem; color: var(--garmin-text-muted); text-transform: uppercase; margin-bottom: 2px; }
-        .readiness-score-container { display: flex; align-items: baseline; gap: 6px; }
-        .readiness-score { font-size: 1.8rem; font-weight: 700; color: #fff; }
-        .readiness-status { font-size: 0.9rem; font-weight: 600; color: var(--garmin-cyan); }
-        .readiness-desc { font-size: 0.7rem; color: var(--garmin-text-muted); margin-top: 3px; line-height: 1.2; word-break: break-word; }
+        .readiness-left h3 { font-size: 0.8rem; color: var(--garmin-text-muted); text-transform: uppercase; margin-bottom: 3px; }
+        .readiness-score-container { display: flex; align-items: baseline; gap: 8px; }
+        .readiness-score { font-size: 2.2rem; font-weight: 700; color: #fff; }
+        .readiness-status { font-size: 1rem; font-weight: 600; color: var(--garmin-cyan); }
+        .readiness-desc { font-size: 0.75rem; color: var(--garmin-text-muted); margin-top: 4px; line-height: 1.3; }
         .readiness-circle-badge {
-            width: 50px; height: 50px; border-radius: 50%; flex-shrink: 0;
+            width: 60px; height: 60px; border-radius: 50%; flex-shrink: 0;
             background: radial-gradient(circle, #12161f 60%, var(--garmin-cyan) 100%);
             display: flex; align-items: center; justify-content: center;
-            border: 2px solid var(--garmin-cyan); font-weight: bold; font-size: 0.85rem; color: #fff;
+            border: 3px solid var(--garmin-cyan); font-weight: bold; font-size: 1rem; color: #fff;
+        }
+
+        /* Styrketræning Input Kort */
+        .quick-strength-bar {
+            background-color: var(--garmin-card); border-radius: 8px; padding: 15px;
+            border: 1px solid var(--garmin-border); display: flex; flex-direction: column; gap: 12px;
+        }
+        .strength-top-row { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; }
+        .strength-top-row span { font-size: 0.9rem; font-weight: 600; color: #fff; }
+        .strength-controls { display: flex; gap: 8px; align-items: center; }
+        .strength-date-input {
+            background: #12161f; border: 1px solid var(--garmin-border); color: #fff;
+            padding: 6px 10px; border-radius: 4px; font-size: 0.8rem;
+        }
+        .strength-btn {
+            background-color: var(--garmin-green); color: #12161f; border: none;
+            padding: 8px 14px; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 0.8rem;
+            transition: opacity 0.2s;
+        }
+        .strength-btn:hover { opacity: 0.9; }
+
+        /* Sæt & Reps Inputs */
+        .strength-inputs-grid {
+            display: grid; grid-template-columns: 1fr 1fr; gap: 8px; background: #12161f; padding: 10px; border-radius: 6px; border: 1px solid var(--garmin-border);
+        }
+        @media(min-width: 600px) { .strength-inputs-grid { grid-template-columns: repeat(4, 1fr); } }
+        .exercise-input-group { display: flex; flex-direction: column; gap: 3px; }
+        .exercise-input-group label { font-size: 0.7rem; color: var(--garmin-text-muted); font-weight: bold; }
+        .exercise-input-group input {
+            background: var(--garmin-card); border: 1px solid var(--garmin-border); color: #fff;
+            padding: 6px; border-radius: 4px; font-size: 0.8rem; text-align: center;
         }
 
         .calendar-card {
-            background-color: var(--garmin-card); border-radius: 8px; padding: 12px;
+            background-color: var(--garmin-card); border-radius: 8px; padding: 15px;
             border: 1px solid var(--garmin-border);
-            width: 100%;
         }
-        .calendar-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
-        .calendar-header h3 { font-size: 0.85rem; color: #fff; font-weight: 600; text-transform: uppercase; }
-        .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; text-align: center; width: 100%; }
-        .cal-day-name { font-size: 0.65rem; color: var(--garmin-text-muted); font-weight: bold; padding-bottom: 4px; }
+        .calendar-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+        .calendar-header h3 { font-size: 0.9rem; color: #fff; font-weight: 600; text-transform: uppercase; }
+        .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; text-align: center; }
+        .cal-day-name { font-size: 0.7rem; color: var(--garmin-text-muted); font-weight: bold; padding-bottom: 6px; }
         .cal-cell {
             background: #12161f; border: 1px solid var(--garmin-border); border-radius: 4px;
-            min-height: 48px; padding: 3px; display: flex; flex-direction: column; justify-content: space-between;
+            min-height: 55px; padding: 4px; display: flex; flex-direction: column; justify-content: space-between;
             cursor: pointer; transition: border-color 0.2s;
-            overflow: hidden;
         }
-        @media (min-width: 600px) { .cal-cell { min-height: 65px; padding: 5px; } }
+        @media (min-width: 600px) { .cal-cell { min-height: 70px; padding: 6px; } }
         .cal-cell:hover { border-color: var(--garmin-cyan); }
         
-        .cal-cell.is-running { border-left: 2px solid var(--garmin-red); background: rgba(239, 68, 68, 0.08); }
-        .cal-cell.is-strength { border-left: 2px solid var(--garmin-green); background: rgba(34, 197, 94, 0.08); }
-        .cal-date { font-size: 0.65rem; color: var(--garmin-text-muted); text-align: left; }
+        .cal-cell.is-running { border-left: 3px solid var(--garmin-red); background: rgba(239, 68, 68, 0.08); }
+        .cal-cell.is-strength { border-left: 3px solid var(--garmin-green); background: rgba(34, 197, 94, 0.08); }
+        .cal-date { font-size: 0.7rem; color: var(--garmin-text-muted); text-align: left; }
         
         .cal-activity-badge.running {
-            font-size: 0.5rem; background: rgba(239, 68, 68, 0.2); color: var(--garmin-red);
-            padding: 1px 2px; border-radius: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left;
+            font-size: 0.55rem; background: rgba(239, 68, 68, 0.2); color: var(--garmin-red);
+            padding: 2px 3px; border-radius: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left;
         }
         .cal-activity-badge.strength {
-            font-size: 0.5rem; background: rgba(34, 197, 94, 0.2); color: var(--garmin-green);
-            padding: 1px 2px; border-radius: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left;
+            font-size: 0.55rem; background: rgba(34, 197, 94, 0.2); color: var(--garmin-green);
+            padding: 2px 3px; border-radius: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left;
         }
 
+        /* POP-UP MODAL */
         .modal-overlay {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background: rgba(0, 0, 0, 0.75); backdrop-filter: blur(4px);
             display: flex; align-items: center; justify-content: center;
             z-index: 1000; opacity: 0; pointer-events: none; transition: opacity 0.2s ease;
-            padding: 10px;
+            padding: 15px;
         }
         .modal-overlay.active { opacity: 1; pointer-events: auto; }
         
         .modal-card {
-            background-color: var(--garmin-card); border-radius: 8px; padding: 16px;
-            width: 100%; max-width: 380px; border: 1px solid var(--garmin-border);
+            background-color: var(--garmin-card); border-radius: 8px; padding: 20px;
+            width: 100%; max-width: 420px; border: 1px solid var(--garmin-border);
             box-shadow: 0 10px 25px rgba(0,0,0,0.5); position: relative;
             transform: translateY(20px); transition: transform 0.2s ease;
-            max-height: 90vh; overflow-y: auto;
         }
         .modal-overlay.active .modal-card { transform: translateY(0); }
 
         .modal-close-btn {
-            position: absolute; top: 10px; right: 10px;
+            position: absolute; top: 12px; right: 12px;
             background: #12161f; color: var(--garmin-text-muted); border: 1px solid var(--garmin-border);
-            width: 28px; height: 28px; border-radius: 50%; font-size: 0.9rem; font-weight: bold;
+            width: 32px; height: 32px; border-radius: 50%; font-size: 1rem; font-weight: bold;
             display: flex; align-items: center; justify-content: center; cursor: pointer;
         }
 
-        .strava-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; padding-right: 25px; }
-        .strava-title-group { display: flex; align-items: center; gap: 6px; }
-        .strava-icon { background: var(--garmin-red); color: #fff; font-weight: bold; padding: 2px 5px; border-radius: 4px; font-size: 0.7rem; }
+        .strava-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; padding-right: 30px; }
+        .strava-title-group { display: flex; align-items: center; gap: 8px; }
+        .strava-icon { background: var(--garmin-red); color: #fff; font-weight: bold; padding: 3px 6px; border-radius: 4px; font-size: 0.75rem; }
         .strava-icon.strength { background: var(--garmin-green); color: #12161f; }
-        .strava-title { font-size: 0.95rem; font-weight: bold; color: #fff; }
-        .strava-meta { font-size: 0.7rem; color: var(--garmin-text-muted); margin-bottom: 12px; }
+        .strava-title { font-size: 1rem; font-weight: bold; color: #fff; }
+        .strava-meta { font-size: 0.75rem; color: var(--garmin-text-muted); margin-bottom: 15px; }
         
-        .strength-form-box {
-            background: #12161f; padding: 12px; border-radius: 6px; border: 1px solid var(--garmin-border); margin-bottom: 12px; display: flex; flex-direction: column; gap: 8px;
+        .strength-exercises-box {
+            background: #12161f; padding: 15px; border-radius: 6px; border: 1px solid var(--garmin-border); margin-bottom: 15px;
         }
-        .strength-form-box h4 { font-size: 0.75rem; color: var(--garmin-green); text-transform: uppercase; margin-bottom: 4px; }
-        .modal-input-group { display: flex; flex-direction: column; gap: 2px; }
-        .modal-input-group label { font-size: 0.65rem; color: var(--garmin-text-muted); font-weight: bold; }
-        .modal-input-group input {
-            background: var(--garmin-card); border: 1px solid var(--garmin-border); color: #fff;
-            padding: 6px; border-radius: 4px; font-size: 0.8rem; text-align: center; width: 100%;
-        }
-        .save-strength-btn {
-            background-color: var(--garmin-green); color: #12161f; border: none;
-            padding: 8px; border-radius: 4px; font-weight: bold; font-size: 0.8rem; cursor: pointer; width: 100%; margin-top: 5px;
-        }
-        .delete-strength-btn {
-            background-color: var(--garmin-red); color: #fff; border: none;
-            padding: 8px; border-radius: 4px; font-weight: bold; font-size: 0.8rem; cursor: pointer; width: 100%; margin-top: 5px;
-        }
+        .strength-exercises-box h4 { font-size: 0.85rem; color: var(--garmin-green); margin-bottom: 10px; text-transform: uppercase; letter-spacing: 0.5px; }
+        .strength-exercises-box ul { padding-left: 18px; font-size: 0.9rem; color: var(--garmin-text); display: grid; gap: 8px; }
 
         .strava-stats-grid {
-            display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; background: #12161f;
-            padding: 10px; border-radius: 6px; margin-bottom: 12px; text-align: center;
+            display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; background: #12161f;
+            padding: 12px; border-radius: 6px; margin-bottom: 15px; text-align: center;
         }
-        .stat-box .label { font-size: 0.65rem; color: var(--garmin-text-muted); }
-        .stat-box .value { font-size: 1rem; font-weight: bold; color: #fff; margin-top: 2px; }
+        .stat-box .label { font-size: 0.7rem; color: var(--garmin-text-muted); }
+        .stat-box .value { font-size: 1.1rem; font-weight: bold; color: #fff; margin-top: 2px; }
         .view-details-btn {
             display: block; text-align: center; background: var(--garmin-red); color: #fff; text-decoration: none;
-            padding: 8px; border-radius: 4px; font-size: 0.8rem; font-weight: bold;
+            padding: 10px; border-radius: 4px; font-size: 0.85rem; font-weight: bold;
         }
 
         .controls {
             display: flex; flex-direction: column; gap: 10px;
-            background-color: var(--garmin-card); padding: 12px; border-radius: 8px; border: 1px solid var(--garmin-border);
-            width: 100%;
+            background-color: var(--garmin-card); padding: 15px; border-radius: 8px; border: 1px solid var(--garmin-border);
         }
         @media (min-width: 600px) { .controls { flex-direction: row; justify-content: space-between; align-items: center; } }
-        .sync-status { display: flex; align-items: center; gap: 8px; }
-        .sync-indicator { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
-        .sync-indicator.active { background: var(--garmin-green); box-shadow: 0 0 6px var(--garmin-green); }
+        .sync-status { display: flex; align-items: center; gap: 10px; }
+        .sync-indicator { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+        .sync-indicator.active { background: var(--garmin-green); box-shadow: 0 0 8px var(--garmin-green); }
         .sync-indicator.inactive { background: var(--garmin-red); }
-        .sync-info { font-size: 0.75rem; color: var(--garmin-text-muted); }
+        .sync-info { font-size: 0.8rem; color: var(--garmin-text-muted); }
         .sync-btn {
             background-color: var(--garmin-blue); color: #fff; border: none;
-            padding: 8px 14px; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 0.8rem; width: 100%;
+            padding: 10px 16px; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 0.85rem; width: 100%;
         }
         @media (min-width: 600px) { .sync-btn { width: auto; } }
 
         .card {
-            background-color: var(--garmin-card); border-radius: 8px; padding: 12px; border: 1px solid var(--garmin-border);
-            width: 100%;
+            background-color: var(--garmin-card); border-radius: 8px; padding: 15px; border: 1px solid var(--garmin-border);
         }
-        .card-header { border-bottom: 1px solid var(--garmin-border); padding-bottom: 6px; margin-bottom: 10px; }
-        .card-header h3 { font-size: 0.8rem; color: #fff; font-weight: 600; text-transform: uppercase; }
-        .chart-wrapper { position: relative; height: 220px; width: 100%; }
-        @media (min-width: 600px) { .chart-wrapper { height: 280px; } }
+        .card-header { border-bottom: 1px solid var(--garmin-border); padding-bottom: 8px; margin-bottom: 12px; }
+        .card-header h3 { font-size: 0.9rem; color: #fff; font-weight: 600; text-transform: uppercase; }
+        .chart-wrapper { position: relative; height: 260px; width: 100%; }
+        @media (min-width: 600px) { .chart-wrapper { height: 320px; } }
     </style>
 </head>
 <body>
 
     <div class="dashboard-grid">
+        <!-- Header -->
         <header class="garmin-header">
             <div class="brand">
                 <div class="brand-logo">GARMIN</div>
@@ -235,6 +240,7 @@
             </div>
         </header>
 
+        <!-- Training Readiness -->
         <div class="readiness-card">
             <div class="readiness-left">
                 <h3>Træningsparathed</h3>
@@ -247,6 +253,36 @@
             <div class="readiness-circle-badge" id="readinessBadge">--%</div>
         </div>
 
+        <!-- STYRKETRÆNING MED SÆT & REPS -->
+        <div class="quick-strength-bar">
+            <div class="strength-top-row">
+                <span>🏋️ Tilføj styrketræning & sæt/reps</span>
+                <div class="strength-controls">
+                    <input type="date" id="strengthDateInput" class="strength-date-input">
+                    <button class="strength-btn" onclick="addQuickStrength()">+ Gem Træning</button>
+                </div>
+            </div>
+            <div class="strength-inputs-grid">
+                <div class="exercise-input-group">
+                    <label>Leg Curls (Sæt x Reps)</label>
+                    <input type="text" id="ex1" placeholder="f.eks. 3x10">
+                </div>
+                <div class="exercise-input-group">
+                    <label>Hip Adductor</label>
+                    <input type="text" id="ex2" placeholder="f.eks. 3x12">
+                </div>
+                <div class="exercise-input-group">
+                    <label>Hip Abductor</label>
+                    <input type="text" id="ex3" placeholder="f.eks. 3x12">
+                </div>
+                <div class="exercise-input-group">
+                    <label>Step-downs</label>
+                    <input type="text" id="ex4" placeholder="f.eks. 3x10">
+                </div>
+            </div>
+        </div>
+
+        <!-- Månedlig Kalender -->
         <div class="calendar-card">
             <div class="calendar-header">
                 <h3 id="calendarMonthTitle">Træningskalender</h3>
@@ -254,6 +290,7 @@
             <div class="calendar-grid" id="calendarGrid"></div>
         </div>
 
+        <!-- Sync Control -->
         <div class="controls">
             <div class="sync-status">
                 <div class="sync-indicator" id="syncIndicator"></div>
@@ -265,6 +302,7 @@
             <button class="sync-btn" id="syncBtn" onclick="triggerSync()">Synkroniser nu</button>
         </div>
 
+        <!-- Grafer -->
         <div class="card">
             <div class="card-header"><h3>LØBE-PACE (HVER 30 DAG / MAF FRA 13. JULI)</h3></div>
             <div class="chart-wrapper"><canvas id="pace30Chart"></canvas></div>
@@ -282,15 +320,15 @@
             <button class="modal-close-btn" onclick="closeModal()">✕</button>
             <div class="strava-header">
                 <div class="strava-title-group">
-                    <span class="strava-icon" id="modalIconBadge">STYRKE</span>
-                    <span class="strava-title" id="modalTitle">Styrketræning</span>
+                    <span class="strava-icon" id="modalIconBadge">LØB</span>
+                    <span class="strava-title" id="modalTitle">Aktivitet</span>
                 </div>
             </div>
             <div class="strava-meta" id="modalMeta">Dato</div>
             
             <div id="modalContentBody"></div>
 
-            <a id="modalLinkBtn" href="#" class="view-details-btn" style="display:none;">Se fuld analyse →</a>
+            <a id="modalLinkBtn" href="#" class="view-details-btn">Se fuld analyse →</a>
         </div>
     </div>
 
@@ -301,6 +339,11 @@
 
         let rhrChart, pace30Chart;
         let cachedActivities = [];
+
+        window.addEventListener('DOMContentLoaded', () => {
+            const today = new Date().toISOString().split('T')[0];
+            document.getElementById('strengthDateInput').value = today;
+        });
 
         const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
         const todayStr = new Date().toLocaleDateString('da-DK', options);
@@ -336,40 +379,47 @@
         async function loadReadiness() {
             try {
                 const res = await fetch('/api/training/readiness');
-                const data = await res.json();
+                let data = await res.json();
+
+                // Justér træningsparatheden hvis der er lavet styrketræning i dag eller i går
+                const localStrength = JSON.parse(localStorage.getItem('strength_workouts') || '[]');
+                const today = new Date();
+                
+                localStrength.forEach(st => {
+                    const stDate = new Date(st.date);
+                    const daysAgo = Math.floor((today - stDate) / (1000 * 60 * 60 * 24));
+                    if (daysAgo === 0) {
+                        data.score = Math.max(1, data.score - 8);
+                        data.description += " • Styrke i dag (-8%)";
+                    } else if (daysAgo === 1) {
+                        data.score = Math.max(1, data.score - 4);
+                        data.description += " • Styrke i går (-4%)";
+                    }
+                });
+
                 document.getElementById('readinessScore').textContent = `${data.score}%`;
                 document.getElementById('readinessBadge').textContent = `${data.score}%`;
-                document.getElementById('readinessStatus').textContent = `• ${data.status}`;
+                document.getElementById('readinessStatus').textContent = `• ${data.score >= 70 ? 'Høj' : (data.score >= 45 ? 'Moderat' : 'Lav')}`;
                 document.getElementById('readinessDesc').textContent = data.description;
             } catch (e) { console.error(e); }
         }
 
         async function loadCalendar() {
             try {
-                const [resActs, resStrength] = await Promise.all([
-                    fetch('/api/activities/all'),
-                    fetch('/api/strength/all')
-                ]);
-                let rawActivities = await resActs.json();
-                let rawStrength = await resStrength.json();
+                const res = await fetch('/api/activities/all');
+                let rawActivities = await res.json();
+                
+                const localStrength = JSON.parse(localStorage.getItem('strength_workouts') || '[]');
+                rawActivities = [...rawActivities, ...localStrength];
 
-                const formattedStrength = rawStrength.map(s => ({
-                    activity_id: s.activity_id,
-                    activity_type: 'strength',
-                    date: s.date,
-                    exercises: s.exercises,
-                    displayTitle: 'Styrketræning'
-                }));
-
-                let allData = [...rawActivities, ...formattedStrength];
-                cachedActivities = processMafTitles(allData);
+                cachedActivities = processMafTitles(rawActivities);
                 
                 const now = new Date();
                 const year = now.getFullYear();
                 const month = now.getMonth();
                 
                 const monthNames = ["Januar", "Februar", "Marts", "April", "Maj", "Juni", "Juli", "August", "September", "Oktober", "November", "December"];
-                document.getElementById('calendarMonthTitle').textContent = `Kalender — ${monthNames[month]} ${year}`;
+                document.getElementById('calendarMonthTitle').textContent = `Træningskalender — ${monthNames[month]} ${year}`;
 
                 const firstDay = new Date(year, month, 1).getDay();
                 const adjustedFirstDay = firstDay === 0 ? 6 : firstDay - 1;
@@ -383,7 +433,7 @@
                 });
 
                 for (let i = 0; i < adjustedFirstDay; i++) {
-                    grid.innerHTML += `<div class="cal-cell" style="opacity: 0.2;"></div>`;
+                    grid.innerHTML += `<div class="cal-cell" style="opacity: 0.3;"></div>`;
                 }
 
                 for (let day = 1; day <= daysInMonth; day++) {
@@ -420,48 +470,41 @@
             } catch (e) { console.error('Fejl ved indlæsning af kalender', e); }
         }
 
-        async function saveStrengthFromModal(dateStr) {
-            const ex1 = document.getElementById('modalEx1').value || '3x10';
-            const ex2 = document.getElementById('modalEx2').value || '3x12';
-            const ex3 = document.getElementById('modalEx3').value || '3x12';
-            const ex4 = document.getElementById('modalEx4').value || '3x10';
+        function addQuickStrength() {
+            const selectedDateVal = document.getElementById('strengthDateInput').value;
+            if (!selectedDateVal) {
+                alert('Vælg venligst en dato.');
+                return;
+            }
+            
+            const ex1 = document.getElementById('ex1').value || '3x10';
+            const ex2 = document.getElementById('ex2').value || '3x12';
+            const ex3 = document.getElementById('ex3').value || '3x12';
+            const ex4 = document.getElementById('ex4').value || '3x10';
 
-            const payload = {
-                date: `${dateStr}T12:00:00`,
-                exercises: { ex1, ex2, ex3, ex4 }
+            const newStrength = {
+                activity_id: 'strength_' + Date.now(),
+                activity_type: 'strength',
+                date: `${selectedDateVal}T12:00:00`,
+                title: 'Styrketræning',
+                exercises: {
+                    ex1: ex1,
+                    ex2: ex2,
+                    ex3: ex3,
+                    ex4: ex4
+                },
+                displayTitle: 'Styrketræning'
             };
 
-            try {
-                const res = await fetch('/api/strength/save', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
-                });
-                const data = await res.json();
-                alert(data.message);
-                closeModal();
-                loadCalendar();
-                loadReadiness();
-            } catch (e) {
-                alert('Kunne ikke gemme: ' + e.message);
-            }
-        }
+            let localStrength = JSON.parse(localStorage.getItem('strength_workouts') || '[]');
+            // Fjern evt. eksisterende styrke for samme dato for at undgå dubletter
+            localStrength = localStrength.filter(s => !s.date.startsWith(selectedDateVal));
+            localStrength.push(newStrength);
+            localStorage.setItem('strength_workouts', JSON.stringify(localStrength));
 
-        async function deleteStrengthFromModal(dateStr) {
-            if (!confirm(`Er du sikker på, at du vil slette styrketræningen for den ${dateStr}?`)) return;
-
-            try {
-                const res = await fetch(`/api/strength/delete/${dateStr}`, {
-                    method: 'DELETE'
-                });
-                const data = await res.json();
-                alert(data.message);
-                closeModal();
-                loadCalendar();
-                loadReadiness();
-            } catch (e) {
-                alert('Kunne ikke slette: ' + e.message);
-            }
+            alert(`Styrketræning gemt for den ${selectedDateVal}!`);
+            loadCalendar();
+            loadReadiness();
         }
 
         function openActivityModal(dateStr) {
@@ -472,17 +515,36 @@
                 return actDateStr === dateStr;
             });
 
-            const d = new Date(dateStr + 'T12:00:00');
+            if (!match) return;
+
+            const d = new Date(match.date);
+            document.getElementById('modalTitle').textContent = match.displayTitle;
             const dateOnlyStr = d.toLocaleDateString('da-DK', { year: 'numeric', month: 'long', day: 'numeric' });
             document.getElementById('modalMeta').textContent = `${dateOnlyStr} • Vallensbæk`;
 
             const iconBadge = document.getElementById('modalIconBadge');
             const linkBtn = document.getElementById('modalLinkBtn');
             const contentBody = document.getElementById('modalContentBody');
-            const titleEl = document.getElementById('modalTitle');
 
-            if (match && match.activity_type !== 'strength') {
-                titleEl.textContent = match.displayTitle;
+            if (match.activity_type === 'strength') {
+                iconBadge.className = 'strava-icon strength';
+                iconBadge.textContent = 'STYRKE';
+                
+                const ex = match.exercises || { ex1: '3x10', ex2: '3x12', ex3: '3x12', ex4: '3x10' };
+
+                contentBody.innerHTML = `
+                    <div class="strength-exercises-box">
+                        <h4>Gennemførte Øvelser, Sæt & Reps:</h4>
+                        <ul>
+                            <li><strong>Leg Curls (Baglår):</strong> ${ex.ex1}</li>
+                            <li><strong>Hip Adductor (Pres benene sammen):</strong> ${ex.ex2}</li>
+                            <li><strong>Hip Abductor (Pres benene udad):</strong> ${ex.ex3}</li>
+                            <li><strong>Step-downs (Trin-ned øvelse):</strong> ${ex.ex4}</li>
+                        </ul>
+                    </div>
+                `;
+                linkBtn.style.display = 'none';
+            } else {
                 iconBadge.className = 'strava-icon';
                 iconBadge.textContent = 'LØB';
                 contentBody.innerHTML = `
@@ -495,40 +557,6 @@
                 `;
                 linkBtn.style.display = 'block';
                 linkBtn.href = `/activity?date=${dateStr}`;
-            } else {
-                titleEl.textContent = 'Styrketræning';
-                iconBadge.className = 'strava-icon strength';
-                iconBadge.textContent = 'STYRKE';
-
-                const ex = (match && match.exercises) ? match.exercises : { ex1: '3x10', ex2: '3x12', ex3: '3x12', ex4: '3x10' };
-                const hasExisting = match && match.activity_type === 'strength';
-
-                let deleteButtonHtml = hasExisting ? `<button class="delete-strength-btn" onclick="deleteStrengthFromModal('${dateStr}')">Slet Styrketræning</button>` : '';
-
-                contentBody.innerHTML = `
-                    <div class="strength-form-box">
-                        <h4>Indtast Sæt & Reps:</h4>
-                        <div class="modal-input-group">
-                            <label>Leg Curls (Baglår)</label>
-                            <input type="text" id="modalEx1" value="${ex.ex1}">
-                        </div>
-                        <div class="modal-input-group">
-                            <label>Hip Adductor (Pres benene sammen)</label>
-                            <input type="text" id="modalEx2" value="${ex.ex2}">
-                        </div>
-                        <div class="modal-input-group">
-                            <label>Hip Abductor (Pres benene udad)</label>
-                            <input type="text" id="modalEx3" value="${ex.ex3}">
-                        </div>
-                        <div class="modal-input-group">
-                            <label>Step-downs (Trin-ned øvelse)</label>
-                            <input type="text" id="modalEx4" value="${ex.ex4}">
-                        </div>
-                        <button class="save-strength-btn" onclick="saveStrengthFromModal('${dateStr}')">Gem Styrketræning</button>
-                        ${deleteButtonHtml}
-                    </div>
-                `;
-                linkBtn.style.display = 'none';
             }
 
             document.getElementById('activityModal').classList.add('active');
@@ -546,13 +574,13 @@
                 const lastSync = document.getElementById('lastSyncText');
                 if (data.auto_sync_enabled) {
                     indicator.className = 'sync-indicator active';
-                    statusText.textContent = `Auto-sync aktiv (${data.sync_interval_hours}t)`;
+                    statusText.textContent = `Auto-sync aktiv (hver ${data.sync_interval_hours}t)`;
                 } else {
                     indicator.className = 'sync-indicator inactive';
                     statusText.textContent = 'Auto-sync deaktiveret';
                 }
                 if (data.last_sync) {
-                    lastSync.textContent = `Sidst: ${new Date(data.last_sync).toLocaleTimeString('da-DK', {hour: '2-digit', minute:'2-digit'})}`;
+                    lastSync.textContent = `Sidst synkroniseret: ${new Date(data.last_sync).toLocaleString('da-DK')}`;
                 }
             } catch (e) { console.error(e); }
         }
@@ -601,11 +629,11 @@
                             backgroundColor: 'rgba(239, 68, 68, 0.1)',
                             fill: true, 
                             tension: 0.3,
-                            borderWidth: 2, 
-                            pointRadius: 4, 
+                            borderWidth: 3, 
+                            pointRadius: 6, 
                             pointBackgroundColor: '#ef4444',
                             pointBorderColor: '#fff',
-                            pointBorderWidth: 1
+                            pointBorderWidth: 2
                         }]
                     },
                     options: {
@@ -615,11 +643,12 @@
                             y: { 
                                 reverse: true, 
                                 grid: { color: '#2a3447' }, 
-                                ticks: { callback: v => formatPace(v), font: { size: 10 } } 
+                                title: { display: true, text: 'Tempo (Min/km)', color: '#94a3b8' }, 
+                                ticks: { callback: v => formatPace(v) } 
                             },
                             x: { 
                                 grid: { display: false },
-                                ticks: { color: '#e2e8f0', font: { weight: 'bold', size: 10 } }
+                                ticks: { color: '#e2e8f0', font: { weight: 'bold' } }
                             }
                         },
                         plugins: { 
@@ -645,19 +674,19 @@
                 rhrChart = new Chart(ctx, {
                     type: 'line',
                     data: {
-                        labels: data.map(d => d.date.slice(5)),
+                        labels: data.map(d => d.date),
                         datasets: [{
                             label: 'Hvilepuls (bpm)',
                             data: data.map(d => d.resting_hr),
                             borderColor: '#ef4444', backgroundColor: 'rgba(239, 68, 68, 0.08)',
-                            fill: true, tension: 0.2, borderWidth: 2, pointRadius: 2, pointBackgroundColor: '#ef4444'
+                            fill: true, tension: 0.2, borderWidth: 2, pointRadius: 3, pointBackgroundColor: '#ef4444'
                         }]
                     },
                     options: {
                         responsive: true, maintainAspectRatio: false,
                         scales: {
-                            y: { grid: { color: '#2a3447' }, ticks: { font: { size: 10 } }, beginAtZero: false },
-                            x: { grid: { display: false }, ticks: { font: { size: 9 }, maxTicksLimit: 7 } }
+                            y: { grid: { color: '#2a3447' }, title: { display: true, text: 'BPM', color: '#94a3b8' }, beginAtZero: false },
+                            x: { grid: { display: false } }
                         },
                         plugins: { legend: { display: false } }
                     }
