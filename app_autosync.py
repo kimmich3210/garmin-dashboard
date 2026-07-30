@@ -1,5 +1,5 @@
 """
-Garmin Workout Dashboard - Pure Running Version
+Garmin Workout Dashboard - Pure Running & Gemini AI Version
 """
 
 from fastapi import FastAPI, HTTPException
@@ -13,6 +13,7 @@ from pathlib import Path
 from datetime import datetime, timedelta
 import os
 import logging
+from google import genai
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -23,11 +24,20 @@ logger = logging.getLogger(__name__)
 # ============================================================================
 GARMIN_EMAIL = os.getenv("GARMIN_EMAIL", "")
 GARMIN_PASSWORD = os.getenv("GARMIN_PASSWORD", "")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 SYNC_INTERVAL_HOURS = int(os.getenv("SYNC_INTERVAL_HOURS", "6"))
 ACTIVITY_LOOKBACK_DAYS = int(os.getenv("ACTIVITY_LOOKBACK_DAYS", "90"))
 
 DB_PATH = Path(__file__).parent / "workouts.db"
 TOKEN_PATH = Path(__file__).parent / ".garmin_session"
+
+# Initialize Gemini Client if key is available
+gemini_client = None
+if GEMINI_API_KEY:
+    try:
+        gemini_client = genai.Client(api_key=GEMINI_API_KEY)
+    except Exception as e:
+        logger.error(f"Failed to initialize Gemini client: {e}")
 
 # ============================================================================
 # GARMIN SYNC LOGIC
@@ -75,19 +85,9 @@ class GarminSync:
             batch = sorted(batch, key=lambda x: x.get("startTimeLocal", ""))
             
             activities = []
-            maf_counter = 1
-            maf_start_date = datetime.strptime("2026-07-13", "%Y-%m-%d")
-
             for a in batch:
                 norm = self._normalize_activity(a)
                 if norm["activity_type"] in ["running", "treadmill_running", "track_running"]:
-                    try:
-                        act_date = datetime.strptime(norm["date"].split("T")[0], "%Y-%m-%d")
-                        if act_date >= maf_start_date:
-                            norm["title"] = f"MAF {maf_counter}"
-                            maf_counter += 1
-                    except:
-                        pass
                     activities.append(norm)
             return activities
         except Exception as e:
@@ -393,6 +393,45 @@ async def get_all_activities():
     """).fetchall()
     conn.close()
     return [dict(row) for row in rows]
+
+@app.get("/api/ai/analyze-maf")
+async def analyze_maf_with_gemini():
+    if not gemini_client:
+        return {"analysis": "Gemini API-nøgle er ikke konfigureret på serveren."}
+    try:
+        conn = get_db_connection()
+        rows = conn.execute("""
+            SELECT date, title, distance, duration_minutes, avg_pace_minutes, avg_hr
+            FROM activities
+            WHERE activity_type IN ('running', 'treadmill_running', 'track_running')
+              AND date >= '2026-07-13'
+            ORDER BY date DESC
+        """).fetchall()
+        conn.close()
+        
+        if not rows:
+            return {"analysis": "Ingen løbedata fundet fra den 13. juli 2026 og frem."}
+
+        runs_summary = "\n".join([
+            f"Dato: {r['date'].split('T')[0]}, Titel: {r['title']}, Længde: {r['distance']/1000:.1f} km, Tid: {r['duration_minutes']:.1f} min, Pace: {int(r['avg_pace_minutes'])}:{int((r['avg_pace_minutes']%1)*60):02d} min/km, Puls: {r['avg_hr']} bpm"
+            for r in rows
+        ])
+        
+        prompt = (
+            "Du er en professionel udholdenhedstræner og ekspert i MAF-træningsmetoden. "
+            "Analyser følgende løbeture, som er startet fra den 13. juli 2026:\n\n" + runs_summary + "\n\n"
+            "Giv en skarp, motiverende og faglig analyse på dansk af udviklingen i aerob base, pulsstabilitet og forholdet mellem puls og tempo. "
+            "Skriv det direkte og letforståeligt."
+        )
+
+        response = gemini_client.models.generate_content(
+            model='gemini-2.5-flash',
+            contents=prompt
+        )
+        return {"analysis": response.text}
+    except Exception as e:
+        logger.error(f"Gemini fejl: {e}")
+        return {"analysis": f"Kunne ikke generere AI-analyse lige nu: {str(e)}"}
 
 @app.get("/api/activity/{date_str}")
 async def get_activity_by_date(date_str: str):

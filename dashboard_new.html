@@ -16,6 +16,7 @@
             --garmin-border: #2a3447;
             --garmin-green: #22c55e;
             --garmin-red: #ef4444;
+            --garmin-purple: #8b5cf6;
         }
 
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -87,6 +88,23 @@
             display: flex; align-items: center; justify-content: center;
             border: 3px solid var(--garmin-cyan); font-weight: bold; font-size: 1rem; color: #fff;
         }
+
+        /* GEMINI AI CARD */
+        .ai-card {
+            background: linear-gradient(135deg, rgba(139, 92, 246, 0.15), var(--garmin-card));
+            border: 1px solid var(--garmin-purple);
+            border-radius: 8px;
+            padding: 15px;
+        }
+        .ai-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+        .ai-title { font-size: 0.9rem; color: #c4b5fd; font-weight: 600; text-transform: uppercase; display: flex; align-items: center; gap: 6px; }
+        .ai-btn {
+            background-color: var(--garmin-purple); color: #fff; border: none;
+            padding: 6px 12px; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 0.8rem;
+            transition: opacity 0.2s;
+        }
+        .ai-btn:hover { opacity: 0.9; }
+        .ai-content { font-size: 0.85rem; color: var(--garmin-text); line-height: 1.4; white-space: pre-wrap; }
 
         .calendar-card {
             background-color: var(--garmin-card); border-radius: 8px; padding: 15px;
@@ -210,6 +228,15 @@
             <div class="readiness-circle-badge" id="readinessBadge">--%</div>
         </div>
 
+        <!-- GEMINI AI COACH -->
+        <div class="ai-card">
+            <div class="ai-header">
+                <div class="ai-title"><i class="fa-solid fa-robot"></i> Gemini AI MAF Træner</div>
+                <button class="ai-btn" id="aiBtn" onclick="fetchAiAnalysis()">Få AI Feedback</button>
+            </div>
+            <div class="ai-content" id="aiContent">Tryk på knappen for at få AI-analyse af dine løbeture og MAF-udvikling siden 13. juli 2026.</div>
+        </div>
+
         <!-- Månedlig Kalender -->
         <div class="calendar-card">
             <div class="calendar-header">
@@ -232,7 +259,7 @@
 
         <!-- Grafer -->
         <div class="card">
-            <div class="card-header"><h3>LØBE- OG PULSUDVIKLING (FRA 13. JULI)</h3></div>
+            <div class="card-header"><h3>LØBE- OG PULSUDVIKLING (FRA 13. JULI) — Juli 2026</h3></div>
             <div class="chart-wrapper"><canvas id="pace30Chart"></canvas></div>
         </div>
 
@@ -265,6 +292,7 @@
         </div>
     </div>
 
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/js/all.min.js"></script>
     <script>
         Chart.defaults.color = '#94a3b8';
         Chart.defaults.borderColor = '#2a3447';
@@ -281,6 +309,22 @@
             if (!m) return '--';
             const mins = Math.floor(m), secs = Math.round((m - mins) * 60);
             return `${mins}:${secs.toString().padStart(2, '0')}`;
+        }
+
+        async function fetchAiAnalysis() {
+            const contentBox = document.getElementById('aiContent');
+            const btn = document.getElementById('aiBtn');
+            contentBox.textContent = "Gemini AI analyserer dine MAF-løbeture...";
+            btn.disabled = true;
+            try {
+                const res = await fetch('/api/ai/analyze-maf');
+                const data = await res.json();
+                contentBox.textContent = data.analysis;
+            } catch (e) {
+                contentBox.textContent = "Kunne ikke hente AI-analyse i øjeblikket.";
+            } finally {
+                btn.disabled = false;
+            }
         }
 
         async function loadReadiness() {
