@@ -12,7 +12,6 @@ import pandas as pd
 import sqlite3
 from pathlib import Path
 from datetime import datetime, timedelta
-import json
 import os
 import logging
 
@@ -189,25 +188,10 @@ class GarminSync:
                 WHERE activity_type IN ('running', 'treadmill_running', 'track_running')
                 ORDER BY date DESC LIMIT 1
             """).fetchone()
-
-            strength_row = cursor.execute("""
-                SELECT date, 'Styrketræning' as title, 0 as distance, 0 as duration_minutes, 'strength' as type
-                FROM strength_workouts
-                ORDER BY date DESC LIMIT 1
-            """).fetchone()
-            
             conn.close()
 
-            runs_date = run_row["date"] if run_row else ""
-            strength_date = strength_row["date"] if strength_row else ""
-
-            if runs_date and strength_date:
-                latest_act = strength_row if strength_date >= runs_date else run_row
-            elif strength_row:
-                latest_act = strength_row
-            elif run_row:
+            if run_row:
                 latest_act = run_row
-
         except Exception as e:
             logger.error(f"Fejl ved hentning af seneste aktivitet: {e}")
 
@@ -218,27 +202,16 @@ class GarminSync:
                 today_date = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
                 days_ago = (today_date - act_date.replace(hour=0, minute=0, second=0, microsecond=0)).days
                 
-                if latest_act["type"] == "strength":
-                    if days_ago == 0:
-                        recent_penalty = 8
-                        last_activity_text = "Sidste træning: Styrketræning i dag"
-                    elif days_ago == 1:
-                        recent_penalty = 4
-                        last_activity_text = "Sidste træning: Styrketræning i går"
-                    else:
-                        recent_penalty = max(0, int(6 / max(1, days_ago)))
-                        last_activity_text = f"Sidste træning: Styrketræning for {days_ago} dage siden"
+                dist_km = (latest_act["distance"] or 0) / 1000
+                if days_ago == 0:
+                    recent_penalty = int(dist_km * 1.5)
+                    last_activity_text = f"Sidste løb: I dag ({dist_km:.1f} km)"
+                elif days_ago == 1:
+                    recent_penalty = int(dist_km * 0.8)
+                    last_activity_text = f"Sidste løb: I går ({dist_km:.1f} km)"
                 else:
-                    dist_km = (latest_act["distance"] or 0) / 1000
-                    if days_ago == 0:
-                        recent_penalty = int(dist_km * 1.5)
-                        last_activity_text = f"Sidste løb: I dag ({dist_km:.1f} km)"
-                    elif days_ago == 1:
-                        recent_penalty = int(dist_km * 0.8)
-                        last_activity_text = f"Sidste løb: I går ({dist_km:.1f} km)"
-                    else:
-                        recent_penalty = max(0, int(dist_km * (0.5 / max(1, days_ago))))
-                        last_activity_text = f"Sidste løb: For {days_ago} dage siden ({dist_km:.1f} km)"
+                    recent_penalty = max(0, int(dist_km * (0.5 / max(1, days_ago))))
+                    last_activity_text = f"Sidste løb: For {days_ago} dage siden ({dist_km:.1f} km)"
             except Exception as e:
                 logger.error(f"Fejl ved udregning af straf: {e}")
 
@@ -322,13 +295,6 @@ def init_db():
         CREATE TABLE IF NOT EXISTS resting_heart_rate (
             date TEXT PRIMARY KEY,
             resting_hr INTEGER
-        )
-    """)
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS strength_workouts (
-            activity_id TEXT PRIMARY KEY,
-            date TEXT,
-            exercises TEXT
         )
     """)
     conn.commit()
@@ -429,50 +395,6 @@ async def get_all_activities():
     conn.close()
     return [dict(row) for row in rows]
 
-@app.get("/api/strength/all")
-async def get_all_strength():
-    conn = get_db_connection()
-    rows = conn.execute("SELECT * FROM strength_workouts").fetchall()
-    conn.close()
-    
-    result = []
-    for row in rows:
-        item = dict(row)
-        try:
-            item["exercises"] = json.loads(item["exercises"])
-        except:
-            item["exercises"] = {}
-        result.append(item)
-    return result
-
-@app.post("/api/strength/save")
-async def save_strength(data: dict):
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    
-    date_val = data.get("date", "").split("T")[0]
-    act_id = f"strength_{date_val}"
-    date_str = data.get("date")
-    exercises_json = json.dumps(data.get("exercises", {}))
-    
-    cursor.execute("""
-        INSERT OR REPLACE INTO strength_workouts (activity_id, date, exercises)
-        VALUES (?, ?, ?)
-    """, (act_id, date_str, exercises_json))
-    
-    conn.commit()
-    conn.close()
-    return {"message": "Styrketræning gemt succesfuldt på serveren"}
-
-@app.delete("/api/strength/delete/{date_str}")
-async def delete_strength(date_str: str):
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("DELETE FROM strength_workouts WHERE date LIKE ?", (f"{date_str}%",))
-    conn.commit()
-    conn.close()
-    return {"message": "Styrketræning slettet succesfuldt"}
-
 @app.get("/api/activity/{date_str}")
 async def get_activity_by_date(date_str: str):
     conn = get_db_connection()
@@ -526,5 +448,3 @@ async def dashboard():
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
-
-    
