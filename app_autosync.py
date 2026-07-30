@@ -1,5 +1,5 @@
 """
-Garmin Workout Dashboard - Original Garmin Stats & Gemini AI Version
+Garmin Workout Dashboard - Pure Garmin Sync Version
 """
 
 from fastapi import FastAPI, HTTPException
@@ -13,7 +13,6 @@ from pathlib import Path
 from datetime import datetime, timedelta
 import os
 import logging
-from google import genai
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -24,15 +23,11 @@ logger = logging.getLogger(__name__)
 # ============================================================================
 GARMIN_EMAIL = os.getenv("GARMIN_EMAIL", "")
 GARMIN_PASSWORD = os.getenv("GARMIN_PASSWORD", "")
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 SYNC_INTERVAL_HOURS = int(os.getenv("SYNC_INTERVAL_HOURS", "6"))
 ACTIVITY_LOOKBACK_DAYS = int(os.getenv("ACTIVITY_LOOKBACK_DAYS", "90"))
 
 DB_PATH = Path(__file__).parent / "workouts.db"
 TOKEN_PATH = Path(__file__).parent / ".garmin_session"
-
-# Initialiser Gemini klient hvis nøglen findes
-gemini_client = genai.Client(api_key=GEMINI_API_KEY) if GEMINI_API_KEY else None
 
 # ============================================================================
 # GARMIN SYNC LOGIC
@@ -398,42 +393,6 @@ async def get_all_activities():
     """).fetchall()
     conn.close()
     return [dict(row) for row in rows]
-
-@app.get("/api/ai/analyze-maf")
-async def analyze_maf_with_gemini():
-    if not gemini_client:
-        return {"analysis": "Gemini API-nøgle ikke konfigureret på serveren."}
-    try:
-        conn = get_db_connection()
-        rows = conn.execute("""
-            SELECT date, title, distance, duration_minutes, avg_pace_minutes, avg_hr
-            FROM activities
-            WHERE activity_type IN ('running', 'treadmill_running', 'track_running')
-              AND date >= '2026-07-13'
-            ORDER BY date DESC LIMIT 10
-        """).fetchall()
-        conn.close()
-        
-        runs_summary = "\n".join([
-            f"Dato: {r['date']}, Titel: {r['title']}, Længde: {r['distance']/1000:.1f} km, Tid: {r['duration_minutes']:.1f} min, Pace: {r['avg_pace_minutes']:.2f} min/km, Puls: {r['avg_hr']}"
-            for r in rows
-        ])
-        
-        prompt = (
-            "Du er en professionel løbetræner. Analyser følgende MAF-løbeture (startet 13. juli 2026) "
-            "for en løber på dansk. Giv en kort, motiverende og let forståelig vurdering af, om formen "
-            "og effektiviteten bevæger sig i den rigtige retning (lavere puls eller hurtigere tempo). "
-            "Skriv det som en direkte besked i 'Strava AI'-stil:\n\n" + runs_summary
-        )
-
-        response = gemini_client.models.generate_content(
-            model='gemini-2.5-flash',
-            contents=prompt
-        )
-        return {"analysis": response.text}
-    except Exception as e:
-        logger.error(f"Gemini fejl: {e}")
-        return {"analysis": "Kunne ikke generere AI-analyse lige nu."}
 
 @app.get("/api/activity/{date_str}")
 async def get_activity_by_date(date_str: str):
