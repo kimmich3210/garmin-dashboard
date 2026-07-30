@@ -1,6 +1,5 @@
 """
-Garmin Workout Dashboard - Auto-Sync Version
-Automatically syncs data from Garmin Connect on a schedule.
+Garmin Workout Dashboard - Gemini AI Version
 """
 
 from fastapi import FastAPI, HTTPException
@@ -12,9 +11,9 @@ import pandas as pd
 import sqlite3
 from pathlib import Path
 from datetime import datetime, timedelta
-import json
 import os
 import logging
+from google import genai
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -25,13 +24,15 @@ logger = logging.getLogger(__name__)
 # ============================================================================
 GARMIN_EMAIL = os.getenv("GARMIN_EMAIL", "")
 GARMIN_PASSWORD = os.getenv("GARMIN_PASSWORD", "")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 SYNC_INTERVAL_HOURS = int(os.getenv("SYNC_INTERVAL_HOURS", "6"))
 ACTIVITY_LOOKBACK_DAYS = int(os.getenv("ACTIVITY_LOOKBACK_DAYS", "90"))
 
-# Persistent DB path: Sørger for at databasen ikke overskrives ved Git-deploys på Render
-PERSISTENT_DIR = Path("/opt/render/project/src") if Path("/opt/render/project/src").exists() else Path(__file__).parent
-DB_PATH = PERSISTENT_DIR / "workouts.db"
+DB_PATH = Path(__file__).parent / "workouts.db"
 TOKEN_PATH = Path(__file__).parent / ".garmin_session"
+
+# Initialiser Gemini klient hvis nøglen findes
+gemini_client = genai.Client(api_key=GEMINI_API_KEY) if GEMINI_API_KEY else None
 
 # ============================================================================
 # GARMIN SYNC LOGIC
@@ -191,25 +192,10 @@ class GarminSync:
                 WHERE activity_type IN ('running', 'treadmill_running', 'track_running')
                 ORDER BY date DESC LIMIT 1
             """).fetchone()
-
-            strength_row = cursor.execute("""
-                SELECT date, 'Styrketræning' as title, 0 as distance, 0 as duration_minutes, 'strength' as type
-                FROM strength_workouts
-                ORDER BY datetime(date) DESC LIMIT 1
-            """).fetchone()
-            
             conn.close()
 
-            runs_date = run_row["date"] if run_row else ""
-            strength_date = strength_row["date"] if strength_row else ""
-
-            if runs_date and strength_date:
-                latest_act = strength_row if strength_date >= runs_date else run_row
-            elif strength_row:
-                latest_act = strength_row
-            elif run_row:
-                latest_act = run_row
-
+            if run_row:
+                latest_act = dict(run_row)
         except Exception as e:
             logger.error(f"Fejl ved hentning af seneste aktivitet: {e}")
 
@@ -217,34 +203,19 @@ class GarminSync:
             try:
                 act_date_str = latest_act["date"].split("T")[0]
                 act_date = datetime.strptime(act_date_str, "%Y-%m-%d")
-                
-                # Fastlåst dags dato for at skelne knivskarpt mellem i går og i dag
                 today_date = datetime.strptime("2026-07-30", "%Y-%m-%d")
-                
-                # Eksakt beregning af dage imellem
                 days_ago = (today_date - act_date).days
                 
-                if latest_act["type"] == "strength":
-                    if days_ago == 0:
-                        recent_penalty = 12
-                        last_activity_text = "Sidste træning: Styrketræning i dag"
-                    elif days_ago == 1:
-                        recent_penalty = 6
-                        last_activity_text = "Sidste træning: Styrketræning i går"
-                    else:
-                        recent_penalty = max(0, int(8 / days_ago))
-                        last_activity_text = f"Sidste træning: Styrketræning for {days_ago} dage siden"
+                dist_km = (latest_act["distance"] or 0) / 1000
+                if days_ago == 0:
+                    recent_penalty = int(dist_km * 1.5)
+                    last_activity_text = f"Sidste løb: I dag ({dist_km:.1f} km)"
+                elif days_ago == 1:
+                    recent_penalty = int(dist_km * 0.8)
+                    last_activity_text = f"Sidste løb: I går ({dist_km:.1f} km)"
                 else:
-                    dist_km = (latest_act["distance"] or 0) / 1000
-                    if days_ago == 0:
-                        recent_penalty = int(dist_km * 1.5)
-                        last_activity_text = f"Sidste løb: I dag ({dist_km:.1f} km)"
-                    elif days_ago == 1:
-                        recent_penalty = int(dist_km * 0.8)
-                        last_activity_text = f"Sidste løb: I går ({dist_km:.1f} km)"
-                    else:
-                        recent_penalty = max(0, int(dist_km * (0.5 / days_ago)))
-                        last_activity_text = f"Sidste løb: For {days_ago} dage siden ({dist_km:.1f} km)"
+                    recent_penalty = max(0, int(dist_km * (0.5 / days_ago)))
+                    last_activity_text = f"Sidste løb: For {days_ago} dage siden ({dist_km:.1f} km)"
             except Exception as e:
                 logger.error(f"Fejl ved udregning af straf: {e}")
 
@@ -328,13 +299,6 @@ def init_db():
         CREATE TABLE IF NOT EXISTS resting_heart_rate (
             date TEXT PRIMARY KEY,
             resting_hr INTEGER
-        )
-    """)
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS strength_workouts (
-            activity_id TEXT PRIMARY KEY,
-            date TEXT,
-            exercises TEXT
         )
     """)
     conn.commit()
@@ -435,49 +399,41 @@ async def get_all_activities():
     conn.close()
     return [dict(row) for row in rows]
 
-@app.get("/api/strength/all")
-async def get_all_strength():
-    conn = get_db_connection()
-    rows = conn.execute("SELECT * FROM strength_workouts").fetchall()
-    conn.close()
-    
-    result = []
-    for row in rows:
-        item = dict(row)
-        try:
-            item["exercises"] = json.loads(item["exercises"])
-        except:
-            item["exercises"] = {}
-        result.append(item)
-    return result
+@app.get("/api/ai/analyze-maf")
+async def analyze_maf_with_gemini():
+    if not gemini_client:
+        return {"analysis": "Gemini API-nøgle ikke konfigureret på serveren."}
+    try:
+        conn = get_db_connection()
+        rows = conn.execute("""
+            SELECT date, title, distance, duration_minutes, avg_pace_minutes, avg_hr
+            FROM activities
+            WHERE activity_type IN ('running', 'treadmill_running', 'track_running')
+              AND date >= '2026-07-13'
+            ORDER BY date DESC LIMIT 10
+        """).fetchall()
+        conn.close()
+        
+        runs_summary = "\n".join([
+            f"Dato: {r['date']}, Titel: {r['title']}, Længde: {r['distance']/1000:.1f} km, Tid: {r['duration_minutes']:.1f} min, Pace: {r['avg_pace_minutes']:.2f} min/km, Puls: {r['avg_hr']}"
+            for r in rows
+        ])
+        
+        prompt = (
+            "Du er en professionel løbetræner. Analyser følgende MAF-løbeture (startet 13. juli 2026) "
+            "for en løber på dansk. Giv en kort, motiverende og let forståelig vurdering af, om formen "
+            "og effektiviteten bevæger sig i den rigtige retning (lavere puls eller hurtigere tempo). "
+            "Skriv det som en direkte besked i 'Strava AI'-stil:\n\n" + runs_summary
+        )
 
-@app.post("/api/strength/save")
-async def save_strength(data: dict):
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    
-    date_val = data.get("date", "").split("T")[0]
-    act_id = f"strength_{date_val}"
-    date_str = data.get("date")
-    exercises_json = json.dumps(data.get("exercises", {}))
-    
-    cursor.execute("""
-        INSERT OR REPLACE INTO strength_workouts (activity_id, date, exercises)
-        VALUES (?, ?, ?)
-    """, (act_id, date_str, exercises_json))
-    
-    conn.commit()
-    conn.close()
-    return {"message": "Styrketræning gemt succesfuldt på serveren"}
-
-@app.delete("/api/strength/delete/{date_str}")
-async def delete_strength(date_str: str):
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("DELETE FROM strength_workouts WHERE date LIKE ?", (f"{date_str}%",))
-    conn.commit()
-    conn.close()
-    return {"message": "Styrketræning slettet succesfuldt"}
+        response = gemini_client.models.generate_content(
+            model='gemini-2.5-flash',
+            contents=prompt
+        )
+        return {"analysis": response.text}
+    except Exception as e:
+        logger.error(f"Gemini fejl: {e}")
+        return {"analysis": "Kunne ikke generere AI-analyse lige nu."}
 
 @app.get("/api/activity/{date_str}")
 async def get_activity_by_date(date_str: str):
