@@ -28,9 +28,7 @@ GARMIN_PASSWORD = os.getenv("GARMIN_PASSWORD", "")
 SYNC_INTERVAL_HOURS = int(os.getenv("SYNC_INTERVAL_HOURS", "6"))
 ACTIVITY_LOOKBACK_DAYS = int(os.getenv("ACTIVITY_LOOKBACK_DAYS", "90"))
 
-# Persistent DB path: Sørger for at databasen ikke overskrives ved Git-deploys på Render
-PERSISTENT_DIR = Path("/opt/render/project/src") if Path("/opt/render/project/src").exists() else Path(__file__).parent
-DB_PATH = PERSISTENT_DIR / "workouts.db"
+DB_PATH = Path(__file__).parent / "workouts.db"
 TOKEN_PATH = Path(__file__).parent / ".garmin_session"
 
 # ============================================================================
@@ -217,26 +215,24 @@ class GarminSync:
             try:
                 act_date_str = latest_act["date"].split("T")[0]
                 act_date = datetime.strptime(act_date_str, "%Y-%m-%d")
+                today_date = datetime.strptime(today_str, "%Y-%m-%d")
                 
-                # Fastlåst dags dato for at skelne knivskarpt mellem i går og i dag
-                today_date = datetime.strptime("2026-07-30", "%Y-%m-%d")
-                
-                # Eksakt beregning af dage imellem
+                # Præcis beregning af dage imellem dags dato og aktivitetsdato
                 days_ago = (today_date - act_date).days
                 
                 if latest_act["type"] == "strength":
-                    if days_ago == 0:
+                    if days_ago <= 0:
                         recent_penalty = 12
                         last_activity_text = "Sidste træning: Styrketræning i dag"
                     elif days_ago == 1:
-                        recent_penalty = 6
+                        recent_penalty = 7
                         last_activity_text = "Sidste træning: Styrketræning i går"
                     else:
                         recent_penalty = max(0, int(8 / days_ago))
                         last_activity_text = f"Sidste træning: Styrketræning for {days_ago} dage siden"
                 else:
                     dist_km = (latest_act["distance"] or 0) / 1000
-                    if days_ago == 0:
+                    if days_ago <= 0:
                         recent_penalty = int(dist_km * 1.5)
                         last_activity_text = f"Sidste løb: I dag ({dist_km:.1f} km)"
                     elif days_ago == 1:
